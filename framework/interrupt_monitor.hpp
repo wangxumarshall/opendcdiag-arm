@@ -52,14 +52,14 @@ public:
     }
 
     static constexpr bool InterruptMonitorWorks =
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))
             true;
 #else
             false;
 #endif
 };
 
-#if !defined(__linux__) || !defined(__x86_64__)
+#if !defined(__linux__) || (!defined(__x86_64__) && !defined(__aarch64__))
 inline std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType)
 {
     static_assert(!InterruptMonitorWorks);

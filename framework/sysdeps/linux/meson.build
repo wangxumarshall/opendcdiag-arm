@@ -3,8 +3,15 @@
 
 if (host_machine.cpu_family() == 'x86_64')
     framework_files += files(
-        'interrupt_monitor.cpp',
         'msr.c',
+    )
+endif
+
+# The interrupt monitor parses /proc/interrupts (x86 MCE/TRM) on x86-64
+# and the EDAC RAS counters on AArch64; both are Linux-specific.
+if (host_machine.cpu_family() == 'x86_64' or host_machine.cpu_family() == 'aarch64')
+    framework_files += files(
+        'interrupt_monitor.cpp',
     )
 endif
 

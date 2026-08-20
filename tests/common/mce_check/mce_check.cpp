@@ -31,7 +31,7 @@
 
 #include <cassert>
 
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))
 #include <vector>
 
 namespace {
@@ -120,8 +120,8 @@ bool InterruptMonitor::observed_mce_events()
 // be in the actual test list - it is an "inserted" test in that the test
 // is always inserted in the end.
 
-#if !defined(__linux__) || !defined(__x86_64__)
-// no MCE test outside Linux
+#if !defined(__linux__) || (!defined(__x86_64__) && !defined(__aarch64__))
+// no MCE test outside Linux x86-64/aarch64
 static_assert(!InterruptMonitor::InterruptMonitorWorks);
 
 // On non-x86 platforms there is no machine-check mechanism to monitor, so the
@@ -144,7 +144,7 @@ static int mce_check_noop_run(struct test *test, int thread)
 
 DECLARE_MANUAL_TEST(mce_check, "Machine Check Exceptions/Events count")
         .groups = DECLARE_TEST_GROUPS(&group_special),
-#if defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))
         .test_preinit = mce_check_preinit,
         .test_run = mce_check_run,
         .desired_duration = -1,
@@ -155,7 +155,7 @@ DECLARE_MANUAL_TEST(mce_check, "Machine Check Exceptions/Events count")
         .test_preinit = mce_check_noop_preinit,
         .test_run = mce_check_noop_run,
         .quality_level = TEST_QUALITY_SKIP,
-#endif // __linux__ && __x86_64__
+#endif // __linux__ && (__x86_64__ || __aarch64__)
 END_DECLARE_TEST
 
 // Do not convert to use the test declaration macros - read above
