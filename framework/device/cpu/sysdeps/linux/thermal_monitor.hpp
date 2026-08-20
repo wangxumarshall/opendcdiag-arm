@@ -8,6 +8,8 @@
 
 #include <glob.h>
 #include <fstream>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #define DEFAULT_SYS_THERMAL_PATH "/sys/devices/virtual/thermal/"
@@ -39,7 +41,7 @@ public:
         auto thermal_zone_dirs = glob_directories(thermal_path_sys_root + "/thermal_zone*");
 
         for (const auto &directory : thermal_zone_dirs) {
-            if (is_x86_package_zone(directory))
+            if (is_cpu_thermal_zone(directory))
                 add_socket_temperature_file(directory);
         }
     }
@@ -53,9 +55,26 @@ public:
     }
 
 
-    static bool is_x86_package_zone(const std::string & thermal_zone_dir) {
+    /* Return true if this thermal_zone* directory measures a CPU/SoC-package
+     * temperature. On x86 the relevant zone carries type "x86_pkg_temp"; on
+     * AArch64 the kernel exposes per-cluster/CPU-package zones with names
+     * such as "soc-thermal", "cpu-thermal", "cpu_thermal", "soc" or the
+     * "big"/"little" cluster names. Match those too so thermal throttling
+     * works on ARM platforms that expose a CPU thermal zone.
+     *
+     * Matching is exact against a known set so that a deliberately
+     * non-CPU zone (e.g. the unit-test's "not_x86_pkg_temp") is skipped. */
+    static bool is_cpu_thermal_zone(const std::string & thermal_zone_dir) {
+        static const std::unordered_set<std::string> known_types = {
+            "x86_pkg_temp",
+            /* ARM / AArch64 CPU & SoC package thermal-zone type names */
+            "cpu", "cpu_thermal", "cpu-thermal", "cpu-usr",
+            "soc", "soc_thermal", "soc-thermal",
+            "big", "little", "np", "npu",
+            "tsens_tz_sensor", "aoss", "cpuss",
+        };
         std::string zone_type = first_line_of(thermal_zone_dir + "/type");
-        return zone_type == "x86_pkg_temp";
+        return known_types.count(zone_type) != 0;
     }
 
     // Returns a vector of the socket temperatures indexed by the physical socket
