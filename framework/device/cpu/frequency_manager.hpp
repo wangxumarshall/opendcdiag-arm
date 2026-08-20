@@ -8,6 +8,7 @@
 
 #include <sandstone_utils.h>
 
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -34,6 +35,7 @@ private:
     int core_frequency_level_idx = 0;
     int total_core_frequency_levels = 0;
     std::string pstate_driver_initial_status = ""; //if framework itself is enabling userspace save the initial state to restore after everything is done
+    bool core_frequency_supported = false;   // set once the cpufreq sysfs tree is found to be usable
 
     // uncore-frequency variables
     std::vector<std::pair<int, int>> initial_uncore_frequency;  // initial (min, max) un-core pair for each socket
@@ -41,17 +43,19 @@ private:
     uint16_t total_sockets = 0;
     int uncore_frequency_level_idx = 0;
     int total_uncore_frequency_levels = 0;
+    bool uncore_frequency_supported = false;  // set once the (Intel) uncore sysfs tree is found
 
-    std::string read_file(std::string_view file_path)
+    /* Read first line of a sysfs file. Returns std::nullopt if the file is
+     * missing or unreadable instead of aborting, so frequency management can
+     * degrade gracefully on platforms that don't expose the relevant sysfs
+     * (e.g. AArch64 has no intel_pstate/intel_uncore_frequency, and many
+     * boards have no cpufreq at all). */
+    std::optional<std::string> read_file(std::string_view file_path)
     {
-        /* Read first line of given file */
         char line[100]; //100 characters should be more than enough
         AutoClosingFile file(fopen(file_path.data(), "r"));
-
-        if (file == nullptr) {
-            fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
-            exit(EX_IOERR);
-        }
+        if (file == nullptr)
+            return std::nullopt;
         IGNORE_RETVAL(fscanf(file, "%s", line));
         return std::string(line);
     }
@@ -68,17 +72,15 @@ private:
         fprintf(file, "%s", line.data());
     }
 
-    int get_frequency_from_file(std::string_view file_path)
+    std::optional<int> get_frequency_from_file(std::string_view file_path)
     {
         /* Read frequency value from file */
         int frequency = 0;
         AutoClosingFile file(fopen(file_path.data(), "r"));
-
-        if (file == nullptr) {
-            fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, file_path.data());
-            exit(EX_IOERR);
-        }
-        IGNORE_RETVAL(fscanf(file, "%d", &frequency));
+        if (file == nullptr)
+            return std::nullopt;
+        if (fscanf(file, "%d", &frequency) != 1)
+            return std::nullopt;
         return frequency;
     }
 
@@ -109,11 +111,8 @@ private:
         const char *scaling_governor_path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors";
         char read_file[100];
         AutoClosingFile file(fopen(scaling_governor_path, "r"));
-
-        if (file == nullptr) {
-            fprintf(stderr, "%s: cannot read from file: %s: %m\n", program_invocation_name, scaling_governor_path);
-            exit(EX_IOERR);
-        }
+        if (file == nullptr)
+            return false;
 
         bool userspace_present = false;
         while (fscanf(file, "%s", read_file) != EOF) {
@@ -126,16 +125,15 @@ private:
         return userspace_present;
     }
 
-    void check_uncore_frequency_support()
+    bool check_uncore_frequency_support()
     {
         // check for 0th socket. 0th socket should always be present.
+        // The intel_uncore_frequency sysfs tree only exists on Intel
+        // platforms; on other architectures this returns false so the caller
+        // can skip uncore management instead of aborting.
         const char *uncore_path = "/sys/devices/system/cpu/intel_uncore_frequency/package_00_die_00/initial_min_freq_khz";
         AutoClosingFile file(fopen(uncore_path, "r"));
-
-        if (file == nullptr) {
-            fprintf(stderr, "%s: cannot read from file: %s. Please check if intel_uncore_frequency directory is present in the file path /sys/devices/system/cpu: %m\n", program_invocation_name, uncore_path);
-            exit(EX_IOERR);
-        }
+        return file != nullptr;
     }
 
     void enable_disable_userspace(bool should_enable_userspace)
@@ -143,11 +141,19 @@ private:
         const char *pstate_driver_file = "/sys/devices/system/cpu/intel_pstate/status";
         if (should_enable_userspace) {
             // enable "userspace"
-            pstate_driver_initial_status = read_file(pstate_driver_file);
+            auto status = read_file(pstate_driver_file);
+            if (!status) {
+                /* No intel_pstate driver (e.g. non-Intel); nothing to switch,
+                 * callers must have arranged for the "userspace" governor to
+                 * be available via check_if_userspace_present() already. */
+                return;
+            }
+            pstate_driver_initial_status = *status;
             write_file(pstate_driver_file, "passive");
         } else {
             // disable "userspace"
-            write_file(pstate_driver_file, pstate_driver_initial_status);
+            if (pstate_driver_initial_status.size() > 0)
+                write_file(pstate_driver_file, pstate_driver_initial_status);
         }
     }
 
@@ -165,10 +171,19 @@ public:
 
         /* record supported max and min frequencies */
         std::string cpuinfo_max_freq_path{"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"};
-        max_core_frequency_supported = get_frequency_from_file(cpuinfo_max_freq_path);
+        auto max_freq = get_frequency_from_file(cpuinfo_max_freq_path);
+        if (!max_freq) {
+            /* No cpufreq sysfs (common on ARM64 boards that don't expose
+             * cpufreq, e.g. some Kunpeng 920 configurations). Disable core
+             * frequency management and return instead of aborting. */
+            fprintf(stderr, "%s: --vary-frequency: cpufreq sysfs not available on this system; skipping.\n",
+                    program_invocation_name);
+            return;
+        }
+        max_core_frequency_supported = *max_freq;
 
         std::string cpuinfo_min_freq_path{"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"};
-        min_core_frequency_supported = get_frequency_from_file(cpuinfo_min_freq_path);
+        min_core_frequency_supported = get_frequency_from_file(cpuinfo_min_freq_path).value_or(0);
 
         total_core_frequency_levels = std::min(16, (max_core_frequency_supported - min_core_frequency_supported) / 100000);
 
@@ -182,24 +197,35 @@ public:
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
             scaling_governor_path += std::to_string(device_info[cpu].cpu_number);
             scaling_governor_path += SCALING_GOVERNOR;
-            per_cpu_initial_scaling_governor.push_back(read_file(scaling_governor_path));
+            auto governor = read_file(scaling_governor_path);
+            if (!governor)
+                return;   // cpufreq tree incomplete; stop here
+            per_cpu_initial_scaling_governor.push_back(*governor);
 
             //save frequency for every cpu
             std::string initial_scaling_setspeed_frequency_path = BASE_CORE_FREQ_PATH;
             initial_scaling_setspeed_frequency_path += std::to_string(device_info[cpu].cpu_number);
             initial_scaling_setspeed_frequency_path += SCALING_SETSPEED;
-            per_cpu_initial_scaling_setspeed.push_back(read_file(initial_scaling_setspeed_frequency_path));
+            per_cpu_initial_scaling_setspeed.push_back(read_file(initial_scaling_setspeed_frequency_path).value_or(""));
 
             //change scaling_governor to userspace in order to set the cores to different frequencies
             write_file(scaling_governor_path, "userspace");
         }
+        core_frequency_supported = true;
 #endif
     }
 
     void initial_uncore_frequency_setup()
     {
 #ifdef __linux__
-        check_uncore_frequency_support();
+        if (!check_uncore_frequency_support()) {
+            /* No Intel uncore sysfs (e.g. AArch64, or any non-Intel
+             * platform). Skip uncore management instead of aborting. */
+            fprintf(stderr, "%s: --vary-uncore-frequency: intel_uncore_frequency sysfs not available on this system; skipping.\n",
+                    program_invocation_name);
+            return;
+        }
+        uncore_frequency_supported = true;
 
         auto calculate_total_sockets = [] () {
             std::unordered_set<int> found_socket_ids;
@@ -224,10 +250,10 @@ public:
             uncore_frequency_path += std::to_string(socket);
 
             std::string min_freq_file = uncore_frequency_path + "_die_00/min_freq_khz";
-            max_min_frequency.first = get_frequency_from_file(min_freq_file);
+            max_min_frequency.first = get_frequency_from_file(min_freq_file).value_or(0);
 
             std::string max_freq_file = uncore_frequency_path + "_die_00/max_freq_khz";
-            max_min_frequency.second = get_frequency_from_file(max_freq_file);
+            max_min_frequency.second = get_frequency_from_file(max_freq_file).value_or(0);
 
             total_uncore_frequency_levels = std::min(8, (max_min_frequency.second - max_min_frequency.first) / 100000);
 
@@ -240,6 +266,8 @@ public:
     void change_core_frequency()
     {
 #ifdef __linux__
+        if (!core_frequency_supported)
+            return;
         current_set_frequency = core_frequency_levels[core_frequency_level_idx++ % total_core_frequency_levels];
 
         for (int cpu = 0; cpu < device_count(); cpu++) {
@@ -254,6 +282,8 @@ public:
     void change_uncore_frequency()
     {
 #ifdef __linux__
+        if (!uncore_frequency_supported)
+            return;
         for (size_t socket = 0; socket < total_sockets; socket++) {
             std::string uncore_frequency_path = BASE_UNCORE_FREQ_PATH;
             uncore_frequency_path += std::to_string(socket);
@@ -271,6 +301,8 @@ public:
     void restore_core_frequency_initial_state()
     {
 #ifdef __linux__
+        if (!core_frequency_supported)
+            return;
         for (int cpu = 0; cpu < device_count(); cpu++) {
             //restore saved scaling governor for every cpu
             std::string scaling_governor_path = BASE_CORE_FREQ_PATH;
@@ -294,6 +326,8 @@ public:
     void restore_uncore_frequency_initial_state()
     {
 #ifdef __linux__
+        if (!uncore_frequency_supported)
+            return;
         for (size_t socket = 0; socket < total_sockets; socket++) {
             std::string uncore_frequency_path = BASE_UNCORE_FREQ_PATH;
             uncore_frequency_path += std::to_string(socket);
