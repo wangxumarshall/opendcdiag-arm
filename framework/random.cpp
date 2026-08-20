@@ -44,6 +44,9 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SystemFunction036(PVOID RandomBuffer, ULONG Rando
 #ifdef __x86_64__
 #  include <immintrin.h>
 #  define RANDOM_HAS_AES        1
+#elif defined(__aarch64__)
+#  include <arm_neon.h>
+#  define RANDOM_HAS_AES        1
 #endif
 
 #ifndef O_CLOEXEC
@@ -58,6 +61,8 @@ union alignas(64) thread_rng {
     __uint128_t u128[sizeof(u8) / sizeof(__uint128_t)];
 #ifdef __x86_64__
     __m128i m128[sizeof(u8) / sizeof(__m128i)];
+#elif defined(__aarch64__)
+    uint8x16_t m128[sizeof(u8) / sizeof(uint8x16_t)];
 #endif
 };
 
@@ -292,6 +297,7 @@ template struct EngineWrapper<std::minstd_rand>;
 static bool haveAes()
 {
 #if !defined(__x86_64__)
+    // Non-x86: rely on the framework's feature detection (HWCAP on AArch64).
     return device_has_feature(cpu_feature_aes);
 #else
     uint32_t eax, ebx, ecx, edx;
@@ -300,6 +306,7 @@ static bool haveAes()
 #endif
 }
 
+#ifdef __x86_64__
 #pragma GCC push_options
 #pragma GCC target("aes")
 struct aes_engine
@@ -374,6 +381,95 @@ __uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
     return l | (__uint128_t(h) << 64);
 }
 #pragma GCC pop_options
+
+#elif defined(__aarch64__)
+/*
+ * ARM equivalent of the x86 aes_engine. Uses the AArch64 NEON AES
+ * instructions (AESE + AESMC) instead of the Intel AESENC intrinsic.
+ * vaesmcq_u8(vaeseq_u8(data, key)) is the ARM counterpart to
+ * _mm_aesenc_si128(data, key) (one AES round: SubBytes/ShiftRows/
+ * AddRoundKey followed by MixColumns).
+ *
+ * The +crypto target attribute enables the AES instructions for just
+ * this engine on a generic AArch64 build (mirroring x86's
+ * #pragma GCC target("aes")).
+ */
+#pragma GCC push_options
+#pragma GCC target("+crypto")
+struct aes_engine
+{
+    uint8x16_t state[2];
+    aes_engine(const uint32_t &sseq)
+    {
+        uint8x16_t pattern = vld1q_u8(reinterpret_cast<const uint8_t *>(&sseq));
+        state[0] = pattern;
+        state[1] = veorq_u8(pattern, vdupq_n_u8(0xff));
+    }
+
+    uint8x16_t generateM128()
+    {
+        // AESE (SubBytes/ShiftRows/AddRoundKey) + AESMC (MixColumns)
+        uint8x16_t v = vaesmcq_u8(vaeseq_u8(state[0], state[1]));
+        state[0] = v;
+        return v;
+    }
+};
+#pragma GCC pop_options
+
+template<>
+std::string EngineWrapper<aes_engine>::globalState()
+{
+    static const char hexdigits[] = "0123456789abcdef";
+    const uint8_t *state = rng_for_thread(-1)->u8;
+    std::string result;
+    result.resize(2 * sizeof(aes_engine::state));
+    for (size_t i = 0; i < sizeof(aes_engine::state); ++i) {
+        result[2 * i + 0] = hexdigits[state[i] >> 4];
+        result[2 * i + 1] = hexdigits[state[i] & 0xf];
+    }
+    return result;
+}
+
+template<>
+void EngineWrapper<aes_engine>::reloadGlobalState(const char *ptr)
+{
+    uint8_t *state = rng_for_thread(-1)->u8;
+    for (size_t i = 0; ptr[i]; ++i) {
+        unsigned char c = ptr[i];
+        unsigned char nibble = c >= 'a' ? c - 'a' + 10 :
+                                          c >= 'A' ? c - 'A' + 10 : c - '0';
+
+        auto b = state + i / 2;
+        if (i % 2 == 0)
+            *b = nibble << 4;
+        else
+            *b |= nibble;
+    }
+}
+
+template<>
+uint32_t EngineWrapper<aes_engine>::generate32(thread_rng *generator)
+{
+    uint8x16_t r = engine(generator).generateM128();
+    return vgetq_lane_u32(vreinterpretq_u32_u8(r), 0);
+}
+
+template<>
+uint64_t EngineWrapper<aes_engine>::generate64(thread_rng *generator)
+{
+    uint8x16_t r = engine(generator).generateM128();
+    return vgetq_lane_u64(vreinterpretq_u64_u8(r), 0);
+}
+
+template<>
+__uint128_t EngineWrapper<aes_engine>::generate128(thread_rng *generator)
+{
+    uint8x16_t r = engine(generator).generateM128();
+    uint64_t l = vgetq_lane_u64(vreinterpretq_u64_u8(r), 0);
+    uint64_t h = vgetq_lane_u64(vreinterpretq_u64_u8(r), 1);
+    return l | (__uint128_t(h) << 64);
+}
+#endif // __x86_64__ / __aarch64__
 
 template struct EngineWrapper<aes_engine>;
 #else
