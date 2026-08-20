@@ -46,6 +46,16 @@ tests_set_base.add(
     )
 )
 
+# ARM64-native In-Silicon Test (IST), the counterpart of Intel IFS on x86.
+# Only built on aarch64; on x86 the IFS tests above provide the equivalent.
+if host_machine.cpu_family() == 'aarch64'
+    tests_set_base.add(
+        files(
+            'ist/ist.c',
+        )
+    )
+endif
+
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
         when : crypto_dep,
