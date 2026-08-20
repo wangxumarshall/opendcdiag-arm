@@ -108,6 +108,26 @@ Use `--quality=0` to enable them:
 # Run NEON test
 ./builddir/opendcdiag --quality=0 -e neon_add -t 5000
 ```
+**Eigen SVD on ARM64 (NEON + SVE)**:
+The `eigen_svd_cdouble` test (complex-double BDCSVD, used to stress FMA/vector
+units for SDC detection) is the ARM64-native counterpart of the x86 AVX-512
+build. On ARM64 it runs on the NEON backend by default; on x86-64 it keeps the
+original AVX-512 gating (`minimum_cpu = cpu_skylake_avx512`).
+
+```console
+# eigen_svd_cdouble runs on the NEON backend (default ARM64 build)
+./builddir/opendcdiag --quality=-1 -e eigen_svd_cdouble -t 5000
+```
+
+For SVE-capable hardware (e.g. Kunpeng 930), a second variant,
+`eigen_svd_cdouble_sve`, is compiled against Eigen's SVE packet backend and
+built automatically on aarch64. On a CPU without SVE (e.g. Kunpeng 920) it
+reports a clean `CpuNotSupported` skip at init time and never executes any SVE
+instructions.
+```console
+# Runs only on SVE hardware; skips cleanly on Kunpeng 920
+./builddir/opendcdiag --quality=-1 -e eigen_svd_cdouble_sve -t 5000
+```
 For detailed ARM64 build information, see [docs/BUILD_ARM64.md](docs/BUILD_ARM64.md).
 ## Test Quality Levels
 OpenDCDiag-ARM tests are classified by quality levels that determine when they run:

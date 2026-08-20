@@ -36,13 +36,24 @@ typedef Eigen::BDCSVD < Mat > SVD;
 #define M_DIM 300               // weird dim on purpose
 
 using eigen_svd_cdouble_test = EigenSVDTest<SVD, M_DIM>;
+
+/* On x86-64 the test is gated on AVX-512 (Eigen selects the AVX-512 packet
+ * path); on other architectures (e.g. ARM64) there is no equivalent feature
+ * flag, and the framework's base build already selects the native vector
+ * backend (NEON), so the test runs unconditionally there. */
+#if defined(__x86_64__)
+#  define SVD_CDOUBLE_MINIMUM_CPU  cpu_skylake_avx512
+#else
+#  define SVD_CDOUBLE_MINIMUM_CPU  0
+#endif
+
 DECLARE_TEST(eigen_svd_cdouble, "Eigen SVD (Singular Value Decomposition) solving payload, which issues a bunch of matrix multiplies underneath, now operating on std::complex<double>")
   .groups = DECLARE_TEST_GROUPS(&group_math),
   .test_init = eigen_svd_cdouble_test::init,
   .test_run = eigen_svd_cdouble_test::run,
   .test_cleanup = eigen_svd_cdouble_test::cleanup,
-  .minimum_cpu = cpu_skylake_avx512, // just because (Eigen supports
-                                     // that anyway)
+  .minimum_cpu = SVD_CDOUBLE_MINIMUM_CPU,
   .fracture_loop_count = 5,
   .quality_level = TEST_QUALITY_PROD,
 END_DECLARE_TEST
+
