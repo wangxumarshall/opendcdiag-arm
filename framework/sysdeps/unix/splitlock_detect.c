@@ -54,8 +54,17 @@ bool splitlock_enforcement_enabled()
     return enforced;
 }
 #else
+/* On AArch64 (and other non-x86), split-lock enforcement isn't a
+ * configurable kernel feature like x86's #AC exception. AArch64 atomics
+ * are *architecturally* required to be aligned: an atomic operation on an
+ * unaligned address unconditionally faults (SIGBUS), there is no "lenient"
+ * mode to detect at runtime. So split-locked atomics are always
+ * "enforced" (they always trap) on ARM, and there is nothing to probe.
+ *
+ * (splitlock_enforcement_enabled() is currently unused by the framework,
+ * but report the correct semantics rather than a stale false stub.) */
 bool splitlock_enforcement_enabled()
 {
-    return false;
+    return true;
 }
 #endif
