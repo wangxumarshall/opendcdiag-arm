@@ -32,13 +32,19 @@
 #  define gettid()                      syscall(SYS_gettid)
 
 #  ifndef MFD_CLOEXEC
-/* probably an old glibc */
-#    ifndef __x86_64__
-#      error Unsupported architecture
-#    endif
+/* probably an old glibc that doesn't expose the memfd_create wrapper or
+ * the MFD_* flags. Provide the flags ourselves and fall back to the raw
+ * syscall via the portable SYS_memfd_create macro (defined per-arch in
+ * <sys/syscall.h>), instead of the x86-64-specific syscall number 319. */
 #    define MFD_CLOEXEC 1U
-#    define memfd_create(name, flags)     syscall(319, name, flags)
-# endif
+#    ifdef SYS_memfd_create
+#      define memfd_create(name, flags)     syscall(SYS_memfd_create, name, flags)
+#    else
+       /* toolchain too old to know memfd_create at all; disable it and let
+        * open_memfd() fall back to O_TMPFILE / regular tmpfiles. */
+#      define memfd_create(name, flags)     (-1)
+#    endif
+#  endif
 # ifndef MFD_NOEXEC_SEAL
 #   define MFD_NOEXEC_SEAL 8U
 #   define MFD_EXEC 0x10U
