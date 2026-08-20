@@ -330,6 +330,33 @@ void CrashContext::send(int sockfd, siginfo_t *si, void *ucontext)
     count = 2;
 #  endif
 #endif // x86-64
+#if defined(__aarch64__) && defined(__linux__)
+    // On AArch64 the mcontext_t carries the GPRs (fault_address, regs[31],
+    // sp, pc, pstate) inline, and the FP/SIMD + exception syndrome state in a
+    // chain of _aarch64_ctx records in __reserved[]. We transfer the whole
+    // mcontext_t as a single block; the parent decodes it in dump_context().
+    auto ctx = static_cast<ucontext_t *>(ucontext);
+    mcontext_t *mc = &ctx->uc_mcontext;
+    fixed.rip = reinterpret_cast<const void *>(mc->pc);
+    fixed.crash_address = reinterpret_cast<void *>(mc->fault_address);
+    fixed.trap_nr = -1;
+    fixed.error_code = 0;
+    // The Exception Syndrome Register (ESR) carries the ARM64 equivalent of
+    // x86's trap number / error code. It is not a direct mcontext member on
+    // glibc; it lives in an esr_context record inside __reserved[].
+    auto *hp = reinterpret_cast<const struct _aarch64_ctx *>(mc->__reserved);
+    auto *end = reinterpret_cast<const char *>(mc->__reserved) + sizeof(mc->__reserved);
+    while (reinterpret_cast<const char *>(hp) + sizeof(*hp) <= end
+           && hp->magic != 0 && hp->size >= sizeof(*hp)) {
+        if (hp->magic == ESR_MAGIC) {
+            fixed.trap_nr = static_cast<long>(reinterpret_cast<const struct esr_context *>(hp)->esr);
+            break;
+        }
+        hp = reinterpret_cast<const struct _aarch64_ctx *>(reinterpret_cast<const char *>(hp) + hp->size);
+    }
+    vec[1] = { mc, sizeof(*mc) };
+    count = 2;
+#endif // __aarch64__
 
     if ((on_crash_action & context_on_crash) == 0)
         count = 1;
@@ -363,6 +390,13 @@ void CrashContext::receive_internal(int sockfd)
         vec[2] = { xsave_buffer.data() + FXSAVE_SIZE, xsave_buffer.size() - FXSAVE_SIZE };
         count = 3;
 #  endif
+#endif
+#if defined(__aarch64__) && defined(__linux__)
+        // The whole mcontext_t (GPRs + __reserved[] holding FPSIMD/ESR/SVE)
+        // arrives as one block.
+        gpr_size = sizeof(mc);
+        vec[1] = { &mc, gpr_size };
+        count = 2;
 #endif
     }
 
@@ -885,7 +919,11 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
                                uintptr_t(ctx.rip) - uintptr_t(info.dli_fbase));
     }
     if (ctx.rip != ctx.crash_address)
+#ifdef __aarch64__
+        message += stdprintf(", FAR = %p", ctx.crash_address);
+#else
         message += stdprintf(", CR2 = %p", ctx.crash_address);
+#endif
     if (ctx.trap_nr >= 0) {
 #ifdef __x86_64__
         static const char trap_names[][4] = {
@@ -904,6 +942,26 @@ static bool print_signal_info(const CrashContext::Fixed &ctx)
 
         message += stdprintf(", trap=%d (%s), error_code = 0x%lx",
                              ctx.trap_nr, trap_name, ctx.error_code);
+#elif defined(__aarch64__)
+        // On AArch64, trap_nr holds the ESR (Exception Syndrome Register).
+        // EC = ESR[31:26] identifies the exception class; decode common ones.
+        uint32_t esr = uint32_t(ctx.trap_nr);
+        uint32_t ec = (esr >> 26) & 0x3f;
+        const char *ec_name = "??";
+        switch (ec) {
+        case 0x15: ec_name = "SVC"; break;
+        case 0x18: ec_name = "MRS/MSR"; break;
+        case 0x21: ec_name = "instruction_abort_lower"; break;
+        case 0x22: ec_name = "instruction_abort_current"; break;
+        case 0x24: ec_name = "data_abort_same"; break;
+        case 0x25: ec_name = "data_abort_lower"; break;
+        case 0x26: ec_name = "data_abort_current"; break;       // e.g. NULL deref
+        case 0x27: ec_name = "stack_alignment_fault"; break;
+        case 0x2f: ec_name = "SError"; break;
+        default: break;
+        }
+        message += stdprintf(", ESR = 0x%08x (EC=0x%02x %s, ISS=0x%06x)",
+                             esr, ec, ec_name, esr & 0x01ffffff);
 #endif
     }
 
@@ -981,7 +1039,7 @@ static void print_crash_info(int slice, const char *pidstr, CrashContext &ctx)
     if (ctx.contents & CrashContext::MachineContext) {
         std::string log;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         dump_context(log, &ctx.mc, ctx.xsave_buffer.data(), ctx.xsave_buffer.size());
 #endif
         dump_device_state(log, thread);

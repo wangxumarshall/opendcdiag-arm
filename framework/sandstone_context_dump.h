@@ -12,6 +12,9 @@ typedef mcontext_t SandstoneMachineContext;
 #elif defined(__unix__)
 #  include <sys/ucontext.h>
 typedef const mcontext_t *SandstoneMachineContext;
+#  if defined(__aarch64__)
+#    include <asm/sigcontext.h>   // FPSIMD_MAGIC, ESR_MAGIC, _aarch64_ctx, ...
+#  endif
 #else
 typedef const struct _CONTEXT *SandstoneMachineContext;
 #endif  // __unix__
