@@ -123,6 +123,23 @@ bool InterruptMonitor::observed_mce_events()
 #if !defined(__linux__) || !defined(__x86_64__)
 // no MCE test outside Linux
 static_assert(!InterruptMonitor::InterruptMonitorWorks);
+
+// On non-x86 platforms there is no machine-check mechanism to monitor, so the
+// test is a no-op that reports SKIP. This still lets the test be scheduled
+// (e.g. under --quality=-1) without dereferencing a NULL test_run, since the
+// MCE test is always inserted into the test set as a special test.
+static int mce_check_noop_preinit(struct test *test)
+{
+    (void) test;
+    return EXIT_SKIP;
+}
+
+static int mce_check_noop_run(struct test *test, int thread)
+{
+    (void) test;
+    (void) thread;
+    return EXIT_SKIP;
+}
 #endif
 
 DECLARE_MANUAL_TEST(mce_check, "Machine Check Exceptions/Events count")
@@ -135,6 +152,8 @@ DECLARE_MANUAL_TEST(mce_check, "Machine Check Exceptions/Events count")
         .quality_level = TEST_QUALITY_PROD,
         .flags = test_schedule_sequential,
 #else
+        .test_preinit = mce_check_noop_preinit,
+        .test_run = mce_check_noop_run,
         .quality_level = TEST_QUALITY_SKIP,
 #endif // __linux__ && __x86_64__
 END_DECLARE_TEST
