@@ -260,6 +260,57 @@ static void check_missing_features(device_features_t features, device_features_t
 #undef cpuid_errmsg
 
 #else // ! x86-64
+#if defined(__aarch64__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+
+/*
+ * On AArch64 the per-CPU capability bits are exposed at runtime via the
+ * AT_HWCAP / AT_HWCAP2 auxval (see <asm/hwcap.h>), which we read with
+ * getauxval().  The x86_locators[] table generated from simd-arm.conf
+ * encodes, for each feature, which HWCAP word it lives in (hwcap_set:
+ * 0 = AT_HWCAP, 1 = AT_HWCAP2) and its bit number.
+ */
+static device_features_t detect_cpu()
+{
+    unsigned long hwcap  = getauxval(AT_HWCAP);
+    unsigned long hwcap2 = getauxval(AT_HWCAP2);
+
+    device_features_t features = 0;
+    for (size_t i = 0; i < std::size(x86_locators); ++i) {
+        const auto &loc = x86_locators[i];
+        // hwcap_set: 0 = AT_HWCAP, 1 = AT_HWCAP2, 2 = synthetic/never-set
+        unsigned long bits;
+        switch (loc.hwcap_set) {
+        case 1:  bits = hwcap2; break;
+        case 2:  bits = 0;      break;   // synthetic feature, never reported
+        default: bits = hwcap;  break;
+        }
+        if (bits & (1UL << loc.bit))
+            features |= CPU_FEATURE_CONSTANT(i);
+    }
+    return features;
+}
+
+__attribute__((unused))
+static void check_missing_features(device_features_t features, device_features_t minimum_cpu_features)
+{
+    device_features_t missing = minimum_cpu_features & ~features;
+    if (!missing)
+        return;
+    fputs("Cannot run on this CPU.\n"
+          "This application requires certain features not found in your CPU:",
+          stderr);
+    for (size_t i = 0; i < std::size(x86_locators); ++i) {
+        if (missing & CPU_FEATURE_CONSTANT(i))
+            fputs(features_string + features_indices[i], stderr);
+    }
+    fputs("\nexit: invalid\n", stderr);
+    _exit(EX_CONFIG);
+}
+
+#else // non-x86, non-aarch64
+
 static device_features_t detect_cpu()
 {
     return 0;
@@ -271,6 +322,7 @@ static void check_missing_features(device_features_t features, device_features_t
     (void) minimum_cpu_features;
 }
 
+#endif // __aarch64__
 #endif // ! x86-64
 
 // Keep an alias for compatibility
