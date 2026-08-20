@@ -50,11 +50,12 @@ template <typename T> static inline uint16_t ieee754_downconvert(T f)
     if (exp == InputLimits::max_exponent) {
         /* infinity or NaN */
         exp = 2 * OutputLimits::max_exponent - 1;
-#if defined(__i386__) || defined(__x86_64__)
-        /* x86 always quiets any SNaN, so do the same */
+        /* Quiet any SNaN so the resulting FP16 bit pattern is identical
+         * across architectures (x86 FPUs do this in hardware; AArch64 does
+         * not, but we emulate it in software here for cross-architecture
+         * reproducibility, which SDC golden-value comparisons rely on). */
         if (mant)
             mant |= 1 << (OutputLimits::digits - 2);
-#endif
     } else if (exp >= OutputLimits::max_exponent) {
         /* overflow, make it FLT16_MAX or -FLT16_MAX */
         return Float16::max().as_hex | sign;
@@ -102,11 +103,11 @@ template <typename T> static inline uint16_t to_bfloat16(T f)
         return sign;
     } else if (exp == 2 * InputLimits::max_exponent - 1) {
         uint16_t r = v >> 8 * (sizeof(T) - sizeof(BFloat16));
-#if defined(__i386__) || defined(__x86_64__)
-        /* x86 always quiets any SNaN, so do the same */
+        /* Quiet any SNaN for cross-architecture reproducibility (see
+         * to_fp16 / ieee754_downconvert above); x86 FPUs do this in
+         * hardware, AArch64 does not. */
         if (mant)
             r |= 1 << (OutputLimits::digits - 2);
-#endif
         return r;
     }
 
@@ -153,10 +154,10 @@ float fromfp16_emulated(Float16 f)
     // preserve NaN's bit pattern
     uint32_t p = f.as_hex & ~Float16::infinity().as_hex;
 
-#if defined(__i386__) || defined(__x86_64__)
-    /* x86 always quiets any SNaN, so do the same */
+    /* Quiet any SNaN for cross-architecture reproducibility (x86 FPUs do
+     * this in hardware; AArch64 does not, but this is a software conversion
+     * so we emulate it everywhere). */
     p |= 1 << (Float16::digits - 2);
-#endif
 
     p <<= std::numeric_limits<float>::digits - Float16::digits;
     p |= bit_cast<uint32_t>(std::numeric_limits<float>::infinity());
