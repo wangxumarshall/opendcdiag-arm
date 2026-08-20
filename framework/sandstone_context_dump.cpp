@@ -641,4 +641,147 @@ char *dump_xsave(const void *xsave_area, size_t xsave_size, int xsave_dump_mask)
     return nullptr;
 }
 
-#endif // x86-64
+#elif defined(__aarch64__)
+
+#include <asm/sigcontext.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+
+#include <dlfcn.h>
+
+// On AArch64, SandstoneMachineContext is `const mcontext_t *`. The mcontext_t
+// carries the GPRs (fault_address, regs[31], sp, pc, pstate) inline plus the
+// FP/SIMD and exception-syndrome state as _aarch64_ctx records in
+// __reserved[]. There is no separate XSAVE-style area to transfer, so the
+// xsave_area parameter of dump_context() is unused here.
+
+// GCC's -Wformat-truncation can't reason about the short, fixed register
+// names we pass (it assumes an arbitrary-length string), so disable it for
+// the snprintf-based formatters below.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+
+static void append_hex(std::string &f, const char *name, uint64_t value, int width = 16)
+{
+    char buf[64];
+    int n = (width >= 0)
+            ? snprintf(buf, sizeof(buf), " %-5s = 0x%0*llx", name, width, (unsigned long long)value)
+            : snprintf(buf, sizeof(buf), " %-5s = 0x%llx", name, (unsigned long long)value);
+    f.append(buf, n);
+    if (value <= 4096 && int64_t(value) >= -4096) {
+        n = snprintf(buf, sizeof(buf), " (%lld)", (long long)value);
+        f.append(buf, n);
+    }
+    f += '\n';
+}
+
+static void append_pc(std::string &f, const char *name, uintptr_t value)
+{
+    char buf[160];
+    int n = snprintf(buf, sizeof(buf), " %-5s = 0x%016llx", name, (unsigned long long)value);
+    f.append(buf, n);
+    Dl_info dli;
+    if (dladdr(reinterpret_cast<void *>(value), &dli) && dli.dli_sname) {
+        n = snprintf(buf, sizeof(buf), " <%s+%#tx>", dli.dli_sname,
+                     value - reinterpret_cast<uintptr_t>(dli.dli_saddr));
+        f.append(buf, n);
+    }
+    f += '\n';
+}
+
+static const struct fpsimd_context *find_fpsimd(const mcontext_t *mc)
+{
+    auto *hp = reinterpret_cast<const struct _aarch64_ctx *>(mc->__reserved);
+    const char *end = reinterpret_cast<const char *>(mc->__reserved) + sizeof(mc->__reserved);
+    while (reinterpret_cast<const char *>(hp) + sizeof(*hp) <= end
+           && hp->magic != 0 && hp->size >= sizeof(*hp)) {
+        if (hp->magic == FPSIMD_MAGIC)
+            return reinterpret_cast<const struct fpsimd_context *>(hp);
+        hp = reinterpret_cast<const struct _aarch64_ctx *>(reinterpret_cast<const char *>(hp) + hp->size);
+    }
+    return nullptr;
+}
+
+void dump_gprs(std::string &out, SandstoneMachineContext mcp)
+{
+    const mcontext_t *mc = mcp;
+    if (!mc)
+        return;
+
+    static const char reg_names[31][4] = {
+        "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
+        "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+        "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
+        "x24", "x25", "x26", "x27", "x28", "x29", "x30"        // x30 = lr
+    };
+    for (int i = 0; i < 31; ++i)
+        append_hex(out, reg_names[i], mc->regs[i]);
+
+    append_hex(out, "sp", mc->sp);
+    append_pc(out, "pc", mc->pc);
+    append_hex(out, "pstate", mc->pstate);
+    append_hex(out, "far", mc->fault_address);
+}
+
+// GPR dump only (kept symmetric with the x86 dump_gprs_only entry point).
+static void dump_gprs_only(std::string &out, SandstoneMachineContext mc)
+{
+    dump_gprs(out, mc);
+}
+
+static void dump_fpsimd(std::string &out, const struct fpsimd_context *fpsimd)
+{
+    if (!fpsimd)
+        return;
+    char buf[80];
+    int n = snprintf(buf, sizeof(buf), " fpsr = 0x%08x\n", fpsimd->fpsr);
+    out.append(buf, n);
+    n = snprintf(buf, sizeof(buf), " fpcr = 0x%08x\n", fpsimd->fpcr);
+    out.append(buf, n);
+    // Each V-register is a 128-bit __uint128_t; print as two 64-bit halves.
+    for (int i = 0; i < 32; ++i) {
+        const uint64_t *h = reinterpret_cast<const uint64_t *>(&fpsimd->vregs[i]);
+        n = snprintf(buf, sizeof(buf), " v%-2d  = 0x%016llx'%016llx\n",
+                     i, (unsigned long long)h[1], (unsigned long long)h[0]);
+        out.append(buf, n);
+    }
+}
+
+void dump_xsave(std::string &out, const void * /*xsave_area*/, size_t /*xsave_size*/,
+                int /*xsave_dump_mask*/)
+{
+    // ARM64 carries FP/SIMD state inside the mcontext passed to dump_context();
+    // the separate xsave area passed from the wire protocol is unused here.
+    (void) out;
+}
+
+void dump_context(std::string &out, SandstoneMachineContext mcp, const void * /*xsave_area*/,
+                  size_t /*xsave_size*/)
+{
+    const mcontext_t *mc = mcp;
+    if (!mc)
+        return;
+    dump_gprs_only(out, mcp);
+    dump_fpsimd(out, find_fpsimd(mc));
+}
+
+// C API
+char *dump_gprs(SandstoneMachineContext mc)
+{
+    std::string out;
+    dump_gprs(out, mc);
+    if (out.size())
+        return strdup(out.c_str());
+    return nullptr;
+}
+
+char *dump_xsave(const void * /*xsave_area*/, size_t /*xsave_size*/, int /*xsave_dump_mask*/)
+{
+    return nullptr;
+}
+
+#pragma GCC diagnostic pop
+
+#endif // __x86_64__ || __aarch64__
