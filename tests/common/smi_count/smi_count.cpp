@@ -13,6 +13,7 @@
 
 #include "sandstone_p.h"
 
+#if defined(__x86_64__)
 #include "interrupt_monitor.hpp"
 
 #include <cinttypes>
@@ -68,3 +69,52 @@ DECLARE_TEST(smi_count, "Counts SMI events")
     .fracture_loop_count = -1,
     .quality_level = InterruptMonitor::InterruptMonitorWorks ? TEST_QUALITY_PROD : TEST_QUALITY_SKIP,
 END_DECLARE_TEST
+
+#else // !__x86_64__
+
+/*
+ * On x86-64 this test reads the IA32_SMI_COUNT MSR (0x34) via /dev/cpu/<n>/msr
+ * to count System Management Interrupts during a run. ARM64 has no MSR
+ * interface and no direct SMI equivalent; its analogues are the firmware/EL3
+ * initiated interrupts and RAS events (SError, Fault, FIQ), which are not
+ * exposed through a single per-CPU counter the way x86 exposes MSR 0x34.
+ *
+ * The test is therefore kept as a placeholder on non-x86 so it stays listed
+ * and schedulable. When a portable per-CPU firmware/RAS-interrupt counter
+ * becomes available (e.g. via perf_event_open on the ARM PMU, or a sysfs
+ * attribute under /sys/devices/system/cpu/...), fill in the three functions
+ * below following the x86 structure above: a baseline snapshot in preinit,
+ * a per-thread delta reported via log_platform_message() in run, and a
+ * re-snapshot in cleanup.
+ */
+
+static int smi_count_preinit(struct test *test)
+{
+    (void) test;
+    return EXIT_SUCCESS;
+}
+
+static int smi_count_run(struct test *test, int thread)
+{
+    (void) test;
+    (void) thread;
+    return EXIT_SUCCESS;
+}
+
+static int smi_count_cleanup(struct test *test)
+{
+    (void) test;
+    return EXIT_SUCCESS;
+}
+
+DECLARE_TEST(smi_count, "Counts SMI events")
+    .test_preinit = smi_count_preinit,
+    .test_init = [](struct test *t) { return EXIT_SUCCESS; },
+    .test_run = smi_count_run,
+    .test_cleanup = smi_count_cleanup,
+    .desired_duration = -1,
+    .fracture_loop_count = -1,
+    .quality_level = TEST_QUALITY_SKIP,
+END_DECLARE_TEST
+
+#endif // __x86_64__

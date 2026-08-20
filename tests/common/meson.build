@@ -8,7 +8,10 @@ tests_set_common += files(
     'mce_check/mce_check.cpp',
 )
 
-if target_machine.system() == 'linux' and host_machine.cpu_family() == 'x86_64'
+if target_machine.system() == 'linux'
+    # x86-64 uses the IA32_SMI_COUNT MSR; other arches (e.g. ARM64) compile
+    # the placeholder stubs defined inside smi_count.cpp until a portable
+    # firmware/RAS-interrupt counter is wired up.
     tests_set_common += files(
         'smi_count/smi_count.cpp',
     )
