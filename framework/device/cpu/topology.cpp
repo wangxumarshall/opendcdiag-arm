@@ -540,6 +540,34 @@ static FILE *fopenat(int dfd, const char *name)
     return f;
 };
 
+bool TopologyDetector::detect_ppin_via_os(HardwareInfo::PackageInfo *info, int cpufd)
+{
+    if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
+        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
+            return true;
+    }
+    return false;
+}
+
+bool TopologyDetector::detect_ucode_via_os(Topology::Thread *info, int cpufd)
+{
+    FILE *f;
+    if (cpufd < 0)
+        return false;
+
+    // Read Microcode version
+    f = fopenat(cpufd, "microcode/version");
+    if (f) {
+        IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info->microcode));
+        fclose(f);
+    } else {
+        // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
+        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
+            info->microcode = *opt;
+    }
+    return info->microcode != 0;
+}
+
 bool TopologyDetector::detect_cache_via_os(Topology::Thread *info, int cpufd)
 {
     FILE *f;
@@ -1239,35 +1267,7 @@ bool TopologyDetector::detect_topology_via_cpuid(Topology::Thread *info)
     return true;
 }
 
-#  if defined(__linux__)
-bool TopologyDetector::detect_ppin_via_os(HardwareInfo::PackageInfo *info, int cpufd)
-{
-    if (AutoClosingFile f { fopenat(cpufd, "topology/ppin") }) {
-        if (fscanf(f, "%" PRIx64, &info->ppin) > 0)
-            return true;
-    }
-    return false;
-}
-
-bool TopologyDetector::detect_ucode_via_os(Topology::Thread *info, int cpufd)
-{
-    FILE *f;
-    if (cpufd < 0)
-        return false;
-
-    // Read Microcode version
-    f = fopenat(cpufd, "microcode/version");
-    if (f) {
-        IGNORE_RETVAL(fscanf(f, "%" PRIx64 , &info->microcode));
-        fclose(f);
-    } else {
-        // Prior to Linux 4.19, the microcode/version sysfs node was not world-readable
-        if (auto opt = proc_cpuinfo().number(info->cpu_number, "microcode"))
-            info->microcode = *opt;
-    }
-    return info->microcode != 0;
-}
-#  elif defined(_WIN32)
+#if defined(_WIN32)
 bool TopologyDetector::detect_ucode_via_os(Topology::Thread *info)
 {
     HKEY hKey = (HKEY)-1;
@@ -1330,9 +1330,49 @@ bool TopologyDetector::detect_via_cpuid(Topology::Thread *info)
     return detect_topology_via_cpuid(info);     // does cache detection
 }
 #else // !x86-64
+#if defined(__aarch64__)
+/*
+ * On AArch64 the processor identity is the MIDR_EL1 register. Its fields map
+ * onto the x86 "family/model/stepping" triple as follows:
+ *   family    <- implementer   (bits 31:24), e.g. 0x48 = HiSilicon
+ *   model     <- part number   (bits 15:4),  e.g. 0xd01 = Kunpeng 920
+ *   stepping  <- revision      (bits 3:0)
+ * MIDR is exposed as a sysfs attribute on Linux; if that is not readable we
+ * fall back to the /proc/cpuinfo fields (CPU implementer/part/revision).
+ */
+void TopologyDetector::detect_family_via_cpuid()
+{
+    auto &family = sApp->hwinfo.family;
+    auto &model = sApp->hwinfo.model;
+    auto &stepping = sApp->hwinfo.stepping;
+
+    uint64_t midr = 0;
+    char path[sizeof("/sys/devices/system/cpu/cpu2147483647/regs/identification/midr_el1")];
+    sprintf(path, "/sys/devices/system/cpu/cpu0/regs/identification/midr_el1");
+    if (AutoClosingFile f{ fopen(path, "r") }) {
+        if (fscanf(f, "%" PRIx64, &midr) <= 0)
+            midr = 0;
+    }
+    if (!midr) {
+        /* fall back to /proc/cpuinfo (MIDR-derived fields) */
+        if (auto impl = proc_cpuinfo().number(0, "CPU implementer"))
+            midr |= (*impl & 0xff) << 24;
+        if (auto arch = proc_cpuinfo().number(0, "CPU architecture"))
+            midr |= (*arch & 0xf) << 16;
+        if (auto part = proc_cpuinfo().number(0, "CPU part"))
+            midr |= (*part & 0xfff) << 4;
+        if (auto rev = proc_cpuinfo().number(0, "CPU revision"))
+            midr |= (*rev & 0xf);
+    }
+    family = (midr >> 24) & 0xff;     /* implementer */
+    model = (midr >> 4) & 0xfff;       /* part number */
+    stepping = midr & 0xf;             /* revision */
+}
+#else
 void TopologyDetector::detect_family_via_cpuid()
 {
 }
+#endif // __aarch64__
 
 bool TopologyDetector::detect_ppin_via_msr(HardwareInfo::PackageInfo *, LogicalProcessor)
 {
@@ -1344,6 +1384,9 @@ bool TopologyDetector::detect_ucode_via_msr(Topology::Thread *)
     return false;
 }
 
+#if !defined(__linux__)
+/* On Linux the real sysfs-based implementations are provided by the
+ * #ifdef __linux__ block above; only other platforms need these stubs. */
 bool TopologyDetector::detect_ppin_via_os(HardwareInfo::PackageInfo *, int)
 {
     return false;
@@ -1353,6 +1396,7 @@ bool TopologyDetector::detect_ucode_via_os(Topology::Thread *, int)
 {
     return false;
 }
+#endif // !__linux__
 
 bool TopologyDetector::setup_cpuid_detection()
 {

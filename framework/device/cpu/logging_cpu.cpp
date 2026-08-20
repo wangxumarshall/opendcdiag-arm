@@ -299,7 +299,7 @@ void TapFormatLogger::print_thread_header(int fd, int thread, int device, LogLev
         line += stdprintf(", core_type: %s", type);
 
     const HardwareInfo::PackageInfo *pkg = sApp->hwinfo.find_package_id(info->package_id);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     line += stdprintf(", family/model/stepping %02x-%02x-%02x, microcode ", sApp->hwinfo.family, sApp->hwinfo.model,
                       sApp->hwinfo.stepping);
     if (info->microcode)
