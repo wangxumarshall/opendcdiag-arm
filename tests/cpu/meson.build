@@ -9,6 +9,7 @@ tests_config = configuration_data()
 tests_set_base = setmod.source_set()
 tests_set_hsw = setmod.source_set()
 tests_set_skx = setmod.source_set()
+tests_set_sve = setmod.source_set()
 
 tests_common_c_args = [
     debug_c_flags,
@@ -93,10 +94,32 @@ tests_set_base.add(
     )
 )
 
+# On non-x86 (e.g. ARM64) eigen_svd_cdouble is not in the x86-only SKX set, so
+# build the NEON baseline copy here. On x86 the SKX build block below compiles
+# it with AVX-512 instead.
+if host_machine.cpu_family() != 'x86_64'
+    tests_set_base.add(
+        when : eigen3_dep,
+        if_true : files(
+            'eigen_svd/svd_cdouble.cpp',
+        )
+    )
+endif
+
 tests_set_skx.add(
     when : eigen3_dep,
     if_true : files(
         'eigen_svd/svd_cdouble.cpp',
+    )
+)
+
+# ARM64 SVE-backed SVD variant (counterpart of eigen_svd_cdouble). Compiled
+# against Eigen's SVE packet backend and renamed Eigen namespace; only built
+# on aarch64 (see the SVE build block below).
+tests_set_sve.add(
+    when : eigen3_dep,
+    if_true : files(
+        'eigen_svd/svd_cdouble_sve.cpp',
     )
 )
 
@@ -219,4 +242,44 @@ if host_machine.cpu_family() == 'x86_64'
         'ifs/unit/ifs_unit_utils.cpp',
         'ifs/unit/ifs_unittests.cpp',
         )
+endif
+
+# ARM64 SVE build block: mirror of the x86 SKX/HSW blocks above. Compiles the
+# SVD SVE variant against Eigen's SVE packet backend (-DEIGEN_ARM64_USE_SVE)
+# with a fixed vector length, and renames the Eigen namespace so it links
+# beside the NEON baseline without symbol clashes.
+if host_machine.cpu_family() == 'aarch64'
+    march_sve = [
+        '-march=armv8.2-a+sve',
+        '-msve-vector-bits=128',
+    ]
+
+    tests_config_sve = tests_set_sve.apply(tests_config)
+    tests_sve_sources = tests_config_sve.sources()
+
+    if tests_sve_sources.length() > 0
+        tests_sve_a = static_library(
+            'tests_sve',
+            sources : tests_sve_sources,
+            dependencies: [
+                tests_config_sve.dependencies(),
+                boost_dep,
+            ],
+            build_by_default: false,
+            include_directories: [
+                tests_common_incdirs,
+            ],
+            c_args : [
+                tests_common_c_args,
+                march_sve,
+            ],
+            cpp_args : [
+                tests_common_cpp_args,
+                march_sve,
+                '-DEIGEN_ARM64_USE_SVE',
+                '-DEigen=EigenSVE',
+            ],
+        )
+        sandstone_tests += [tests_sve_a]
+    endif
 endif
