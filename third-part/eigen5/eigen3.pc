@@ -1,0 +1,9 @@
+prefix=/home/sdc/opendcdiag/third-part/eigen5
+exec_prefix=${prefix}
+
+Name: Eigen3
+Description: A C++ template library for linear algebra: vectors, matrices, and related algorithms
+Version: 5.0.1
+Requires:
+Libs:
+Cflags: -I${prefix}
