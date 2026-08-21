@@ -179,6 +179,34 @@ tests_set_base.add(
     )
 )
 
+# Spinlock stress suite. The tests are std::atomic-based (no x86 intrinsics,
+# no arm_neon.h) and portable across both reference architectures: aarch64
+# uses an ARM "yield" hint in the spin loop, x86-64 an "rep nop" (encoded as
+# the "pause" mnemonic) hint. Both are guarded per-arch inside each source
+# file, so the whole set builds unconditionally on tests_set_base.
+tests_set_base.add(
+    files(
+        'spinlock/spinlock_array.cpp',
+        'spinlock/spinlock_bank.cpp',
+        'spinlock/spinlock_crosses_cacheline.cpp',
+        'spinlock/spinlock_cross_socket.cpp',
+        'spinlock/spinlock_mini.cpp',
+        'spinlock/spinlock_randomsweep.cpp',
+        'spinlock/spinlock_rmw_cmpxchg.cpp',
+        'spinlock/spinlock_rmw_cmpxchg_pause.cpp',
+        'spinlock/spinlock_rmw_xchg.cpp',
+        'spinlock/spinlock_rmw_xchg_pause.cpp',
+        'spinlock/spinlock_same_core.cpp',
+        'spinlock/spinlock_stress.cpp',
+        'spinlock/spinlock_stress_bts.cpp',
+        'spinlock/spinlock_stress_cmpxchg.cpp',
+        'spinlock/spinlock_stress_cmpxchg16b.cpp',
+        'spinlock/spinlock_stress_cmpxchg_even_odd.cpp',
+        'spinlock/spinlock_unaligned.cpp',
+        'spinlock/spinlock_with_hle.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
 
 # libatomic provides the __atomic_load_16 / __atomic_store_16 /
