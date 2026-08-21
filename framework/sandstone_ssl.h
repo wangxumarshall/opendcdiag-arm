@@ -7,6 +7,21 @@
 #define SANDSTONE_SSL_H
 
 #include <sandstone.h>
+
+// The ipsec tests historically gate their AVX/AVX-512 variants on x86
+// architecture constants (cpu_haswell / cpu_skylake_avx512) via the
+// .minimum_cpu field. Those symbols do not exist in the ARM64
+// cpu_features.h contract, and on AArch64 there is no "AVX OpenSSL path"
+// to gate — OpenSSL's own runtime dispatch selects its aarch64
+// assembler backends regardless. So on AArch64 the gate is dropped
+// (minimum_cpu = 0, no feature requirement) while on x86-64 the
+// original gate is kept. ipsec tests wrap their gate value in this macro.
+#if defined(__x86_64__)
+#  define IPSEC_X86_GATE(x)  (x)
+#else
+#  define IPSEC_X86_GATE(x)  0
+#endif
+
 #include <openssl/aes.h>
 #include <openssl/bio.h>
 #include <openssl/blowfish.h>
