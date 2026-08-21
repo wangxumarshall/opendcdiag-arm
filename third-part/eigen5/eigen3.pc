@@ -1,4 +1,4 @@
-prefix=/home/sdc/opendcdiag/third-part/eigen5
+prefix=${pcfiledir}
 exec_prefix=${prefix}
 
 Name: Eigen3
