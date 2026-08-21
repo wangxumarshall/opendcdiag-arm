@@ -168,44 +168,84 @@ int Kunpeng920EccDetector::read_edac_errors(memory_error_stats *stats, int cpu)
 
     memset(stats, 0, sizeof(memory_error_stats));
 
-    char path[512];
-    snprintf(path, sizeof(path), "/sys/devices/system/edac/mc/mc%d/ce_count", cpu);
+    /*
+     * EDAC memory controllers are indexed by controller (mc0, mc1, ...),
+     * NOT by CPU. The earlier code built "/sys/.../edac/mc/mc%d/ce_count"
+     * with %d = cpu, which only ever matched mc0 (and only for the call
+     * where cpu happened to be 0); for cpu 1..191 it opened a non-existent
+     * "mc1".."mc191" path, the fopen failed, and every counter stayed 0 —
+     * so RAS ECC monitoring silently reported all-clear for 191/192 cores.
+     *
+     * The counts are controller-wide by design (matching the baseline
+     * interrupt_monitor.cpp read_edac_total() helper, which sums across all
+     * mcN). Enumerate every mcN directory and accumulate ce/ue (+noinfo)
+     * across the whole set. The cpu argument is retained in the signature
+     * only for the APEI/GHES attribution path; the EDAC backend ignores it.
+     */
+    (void)cpu;
 
-    FILE *fp = fopen(path, "r");
-    if (fp) {
-        if (fscanf(fp, "%lu", &stats->ce_count) != 1) {
-            stats->ce_count = 0;
-        }
-        fclose(fp);
+    static constexpr const char *edac_mc_dir = "/sys/devices/system/edac/mc";
+    DIR *dir = opendir(edac_mc_dir);
+    if (!dir) {
+        snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC");
+        snprintf(stats->dimm_id, sizeof(stats->dimm_id), "mc?");
+        return 0;
     }
 
-    snprintf(path, sizeof(path), "/sys/devices/system/edac/mc/mc%d/ue_count", cpu);
-    fp = fopen(path, "r");
-    if (fp) {
-        if (fscanf(fp, "%lu", &stats->ue_count) != 1) {
-            stats->ue_count = 0;
-        }
-        fclose(fp);
-    }
+    int controller_count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (strncmp(entry->d_name, "mc", 2) != 0)
+            continue;
+        char *endptr;
+        long mc_idx = strtol(entry->d_name + 2, &endptr, 10);
+        if (endptr == entry->d_name + 2 || *endptr != '\0' || mc_idx < 0)
+            continue;
 
-    snprintf(path, sizeof(path), "/sys/devices/system/edac/mc/mc%d/ce_noinfo_count", cpu);
-    fp = fopen(path, "r");
-    if (fp) {
-        uint64_t ce_noinfo = 0;
-        if (fscanf(fp, "%lu", &ce_noinfo) == 1) {
-            stats->ce_count += ce_noinfo;
-        }
-        fclose(fp);
-    }
+        char path[512];
+        uint64_t local_ce = 0, local_ue = 0, local_ce_noinfo = 0, local_ue_noinfo = 0;
 
-    snprintf(path, sizeof(path), "/sys/devices/system/edac/mc/mc%d/ue_noinfo_count", cpu);
-    fp = fopen(path, "r");
-    if (fp) {
-        uint64_t ue_noinfo = 0;
-        if (fscanf(fp, "%lu", &ue_noinfo) == 1) {
-            stats->ue_count += ue_noinfo;
+        snprintf(path, sizeof(path), "%s/%s/ce_count", edac_mc_dir, entry->d_name);
+        if (FILE *fp = fopen(path, "r")) {
+            if (fscanf(fp, "%lu", &local_ce) != 1)
+                local_ce = 0;
+            fclose(fp);
         }
-        fclose(fp);
+        snprintf(path, sizeof(path), "%s/%s/ue_count", edac_mc_dir, entry->d_name);
+        if (FILE *fp = fopen(path, "r")) {
+            if (fscanf(fp, "%lu", &local_ue) != 1)
+                local_ue = 0;
+            fclose(fp);
+        }
+        snprintf(path, sizeof(path), "%s/%s/ce_noinfo_count", edac_mc_dir, entry->d_name);
+        if (FILE *fp = fopen(path, "r")) {
+            if (fscanf(fp, "%lu", &local_ce_noinfo) == 1)
+                local_ce += local_ce_noinfo;
+            fclose(fp);
+        }
+        snprintf(path, sizeof(path), "%s/%s/ue_noinfo_count", edac_mc_dir, entry->d_name);
+        if (FILE *fp = fopen(path, "r")) {
+            if (fscanf(fp, "%lu", &local_ue_noinfo) == 1)
+                local_ue += local_ue_noinfo;
+            fclose(fp);
+        }
+
+        stats->ce_count += local_ce;
+        stats->ue_count += local_ue;
+        if (controller_count == 0) {
+            snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC_%s", entry->d_name);
+            snprintf(stats->dimm_id, sizeof(stats->dimm_id), "%s", entry->d_name);
+        }
+        ++controller_count;
+    }
+    closedir(dir);
+
+    if (controller_count == 0) {
+        snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC");
+        snprintf(stats->dimm_id, sizeof(stats->dimm_id), "mc?");
+    } else if (controller_count > 1) {
+        snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC_mc0-%d", controller_count - 1);
+        snprintf(stats->dimm_id, sizeof(stats->dimm_id), "mc0-%d", controller_count - 1);
     }
 
     // NOTE: do NOT write to reset_counters here. The previous code wrote '1'
@@ -214,9 +254,6 @@ int Kunpeng920EccDetector::read_edac_errors(memory_error_stats *stats, int cpu)
     // return 0 until a new error arrived, defeating continuous RAS monitoring
     // (the baseline interrupt_monitor.cpp reads ce_count+ue_count without
     // resetting). The EDAC counters are cumulative by design; leave them.
-
-    snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC_MC%d", cpu);
-    snprintf(stats->dimm_id, sizeof(stats->dimm_id), "mc%d", cpu);
 
     return 0;
 }
@@ -289,15 +326,6 @@ int Kunpeng920EccDetector::read_vendor_errors(memory_error_stats *stats, int cpu
         return -1;
     }
 
-    struct {
-        uint32_t cpu;
-        uint32_t type;
-        uint64_t ce_count;
-        uint64_t ue_count;
-    } ras_data = {};
-
-    ras_data.cpu = static_cast<uint32_t>(cpu);
-
     // The vendor RAS char drivers (/dev/hisi_ras etc.) expose errors via an
     // ioctl, but the command number is not publicly specified in any header
     // on this board. The previous code called ioctl(fd, 0, &ras_data) with a
@@ -306,7 +334,9 @@ int Kunpeng920EccDetector::read_vendor_errors(memory_error_stats *stats, int cpu
     // command number is known (from the vendor RAS driver header), do not
     // issue a bogus ioctl: skip the vendor path and let the caller fall back
     // to the EDAC sysfs path (read_edac_errors) which works on this board.
-    (void)fd;
+    // (The per-CPU cpu argument is unused here; vendor RAS attribution, if
+    // ever wired, would key on it.)
+    (void)cpu;
     close(fd);
     return -1;
 }
