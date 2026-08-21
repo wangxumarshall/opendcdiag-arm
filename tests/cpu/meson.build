@@ -298,3 +298,7 @@ if host_machine.cpu_family() == 'aarch64'
         sandstone_tests += [tests_sve_a]
     endif
 endif
+
+# ARM64-native NEON + crypto (AES) tests. The subdir guards the actual build
+# behind `if host_machine.cpu_family() == 'aarch64'` so x86-64 is untouched.
+subdir('arm64')
