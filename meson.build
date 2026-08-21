@@ -291,7 +291,6 @@ target_deps += [
     dl_dep,
     libatomic_dep,
     pthread_dep,
-    atomic_dep,
 ]
 
 top_incdir = include_directories('.')
