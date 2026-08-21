@@ -80,6 +80,32 @@ tests_set_base.add(
     )
 )
 
+# MPSC memcpy coherence stress test (ARM64-only). Ported from a standalone
+# GlusterFS-IOT-scheduler stress tool: producers route requests through a
+# 4-priority linked-list queue (tests/cpu/memory/list.h, kernel-style) and
+# consumers memcpy per-thread mem_info_s buffers, checking b1..b5 stay byte-
+# identical (silent-data-corruption detection). Roles are assigned from CPU
+# topology (device_info[cpu].numa_id/die_id/core_id) per a pluggable
+# strategy config (tests/cpu/memory/strategy_config.h +
+# memcpy_rewr_strategies.conf; cycle strategies via SANDSTONE_STRATEGY_INDEX,
+# override path via SANDSTONE_STRATEGY_CONF). The arch-timer inline asm
+# (mrs cntvct_el0/cntfrq_el0) has no x86 equivalent, so the test is built
+# and registered only on aarch64 (x86-64 untouched). list.h and
+# strategy_config.h are header-only and picked up via relative #include.
+# MEMCPY_REWR_SRC_DIR is injected so the test can locate its default .conf
+# beside the source at runtime regardless of the caller's CWD.
+if host_machine.cpu_family() == 'aarch64'
+    memcpy_rewr_dep = declare_dependency(
+        compile_args : ['-DMEMCPY_REWR_SRC_DIR="' + meson.current_source_dir() + '/memory"'],
+    )
+    tests_set_base.add(
+        when : memcpy_rewr_dep,
+        if_true : files(
+            'memory/memcpy_rewr.cpp',
+        )
+    )
+endif
+
 # Mesh/UPI inter-core traffic stress tests (27 tests, ported from the
 # reference tree). These are REAL ARM NEON ports: all NEON intrinsics
 # (vld1q_s32/vst1q_s32/vceqq_s32/etc.) are under #ifdef __aarch64__ with
