@@ -21,6 +21,15 @@
  * results must be bit-identical; the framework also quiets SNaN uniformly in
  * sandstone_data.cpp so NaN bit patterns match cross-arch.
  *
+ * sNaN honesty note: a *signaling* NaN is built with `__builtin_nans`/`__builtin_nansf`
+ * (quiet bit clear), NOT `__builtin_nan`/`__builtin_nanf` — the latter is a quiet NaN
+ * on this toolchain (verified: `__builtin_nanf("")` == 0x7fc00000, a qNaN; only
+ * `__builtin_nansf("")` == 0x7fa00000 is a real sNaN). Feeding a real sNaN is the
+ * only way to exercise the FPU's sNaN→qNaN quieting datapath, which is a distinct
+ * corruption-prone path from the qNaN-propagation path. NEON vfmaq and libm fmaf
+ * agree byte-exactly on the sNaN input (both emit the quieted result 0x7fe00000),
+ * so the byte-exact golden compare stays sound (no spurious mismatch).
+ *
  * A single-bit ULP flip in the FMA output — exactly the SDC signature these
  * tests exist to catch — is caught by the byte-exact memcmp (unlike the
  * tolerance-based comparison in fma.cpp / fma_patterns_*, which masks it).
@@ -67,8 +76,8 @@ static constexpr int NUM_SPECIALS = 12;
 // Build the float32 special-value table.
 static void build_specials_f32(float t[NUM_SPECIALS])
 {
-    t[0]  = NAN;                                          // qNaN
-    t[1]  = __builtin_nanf("");                           // sNaN
+    t[0]  = NAN;                                          // qNaN  (0x7fc00000)
+    t[1]  = __builtin_nansf("");                          // sNaN  (0x7fa00000) — real signaling NaN
     t[2]  = INFINITY;                                     // +Inf
     t[3]  = -INFINITY;                                    // -Inf
     t[4]  = 0.0f;                                         // +0
@@ -84,8 +93,8 @@ static void build_specials_f32(float t[NUM_SPECIALS])
 // Build the float64 special-value table.
 static void build_specials_f64(double t[NUM_SPECIALS])
 {
-    t[0]  = NAN;                                          // qNaN
-    t[1]  = __builtin_nan("");                           // sNaN
+    t[0]  = NAN;                                          // qNaN  (0x7ff8000000000000)
+    t[1]  = __builtin_nans("");                           // sNaN  (0x7ff4000000000000) — real signaling NaN
     t[2]  = INFINITY;                                     // +Inf
     t[3]  = -INFINITY;                                    // -Inf
     t[4]  = 0.0;                                          // +0
@@ -123,25 +132,31 @@ static int sweep_f32(const float a_t[NUM_SPECIALS],
             for (int k = 0; k < NUM_SPECIALS; ++k) {
                 float a = a_t[i], b = b_t[j], c = c_t[k];
 
-                // Hardware: NEON vfmaq_f32 lane 0 (c + a*b, single rounding).
-                // Broadcast each scalar into a 128-bit vector so the FMA is
-                // exercised on a real vector lane, then extract lane 0.
+                // Hardware: NEON vfmaq_f32 (c + a*b, single rounding). Each
+                // scalar is broadcast into a 128-bit vector so the FMA runs on
+                // a real vector lane; ALL 4 lanes are checked, not just lane 0
+                // — a per-lane SIMD register fault (the SDC signature this test
+                // exists to catch) would otherwise go undetected in 3 of 4
+                // lanes.
                 float32x4_t va = vdupq_n_f32(a);
                 float32x4_t vb = vdupq_n_f32(b);
                 float32x4_t vc = vdupq_n_f32(c);
                 float32x4_t vd = vfmaq_f32(vc, va, vb);
-                hw_lane = vgetq_lane_f32(vd, 0);
 
                 // Software reference: fmaf (single rounding, IEEE-754).
                 sw_lane = fmaf(a, b, c);
+                uint32_t sw_bits = bits_of(sw_lane);
 
-                // Byte-exact compare (1-bit ULP flip is caught).
-                if (bits_of(hw_lane) != bits_of(sw_lane)) {
-                    if (mismatches == 0) {
-                        out_a = a; out_b = b; out_c = c;
-                        out_hw = hw_lane; out_sw = sw_lane;
+                // Byte-exact compare of every lane (1-bit ULP flip is caught).
+                for (int lane = 0; lane < 4; ++lane) {
+                    hw_lane = vgetq_lane_f32(vd, lane);
+                    if (bits_of(hw_lane) != sw_bits) {
+                        if (mismatches == 0) {
+                            out_a = a; out_b = b; out_c = c;
+                            out_hw = hw_lane; out_sw = sw_lane;
+                        }
+                        ++mismatches;
                     }
-                    ++mismatches;
                 }
             }
         }
@@ -164,25 +179,28 @@ static int sweep_f64(const double a_t[NUM_SPECIALS],
             for (int k = 0; k < NUM_SPECIALS; ++k) {
                 double a = a_t[i], b = b_t[j], c = c_t[k];
 
-                // Hardware: NEON vfmaq_f64 lane 0 (c + a*b, single rounding).
+                // Hardware: NEON vfmaq_f64 (c + a*b, single rounding).
                 // float64x2_t is the 128-bit double vector; broadcast each
-                // scalar and extract lane 0 after the FMA.
+                // scalar and check BOTH lanes (not just lane 0).
                 float64x2_t va = vdupq_n_f64(a);
                 float64x2_t vb = vdupq_n_f64(b);
                 float64x2_t vc = vdupq_n_f64(c);
                 float64x2_t vd = vfmaq_f64(vc, va, vb);
-                hw_lane = vgetq_lane_f64(vd, 0);
 
                 // Software reference: fma (single rounding, IEEE-754).
                 sw_lane = fma(a, b, c);
+                uint64_t sw_bits = bits_of(sw_lane);
 
-                // Byte-exact compare (1-bit ULP flip is caught).
-                if (bits_of(hw_lane) != bits_of(sw_lane)) {
-                    if (mismatches == 0) {
-                        out_a = a; out_b = b; out_c = c;
-                        out_hw = hw_lane; out_sw = sw_lane;
+                // Byte-exact compare of every lane (1-bit ULP flip is caught).
+                for (int lane = 0; lane < 2; ++lane) {
+                    hw_lane = vgetq_lane_f64(vd, lane);
+                    if (bits_of(hw_lane) != sw_bits) {
+                        if (mismatches == 0) {
+                            out_a = a; out_b = b; out_c = c;
+                            out_hw = hw_lane; out_sw = sw_lane;
+                        }
+                        ++mismatches;
                     }
-                    ++mismatches;
                 }
             }
         }
