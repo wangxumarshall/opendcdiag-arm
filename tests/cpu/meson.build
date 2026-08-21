@@ -285,6 +285,27 @@ tests_set_base.add(
     )
 )
 
+# CRC test suite (15 tests, tests/cpu/crc/). Three groups:
+#  - zpclmul / zpclmul_rep: zlib CRC32 with an ARM NEON instruction exercised
+#    on aarch64 (gated by #ifdef __aarch64__ in the source; on other arches
+#    they degrade to a portable zlib-only path, so they build everywhere
+#    zlib is present). Wired under the zlib_dep gate since they call
+#    zlib crc32().
+#  - 10 isal_* tests: isa-l (libisal) CRC functions. isal is a portable C
+#    library with arch-optimised dispatch internally; the tests declare their
+#    own extern "C" prototypes. Wired under the isal_lib gate below.
+#  - 3 crc32* tests: ARM ACLE __crc32b/h/w intrinsics (<arm_acle.h>).
+#    aarch64-only (the intrinsics need +crc); built in the dedicated
+#    tests_crc_a static_library with -march=armv8.1-a+crc (see below). On
+#    non-aarch64 they compile to a clean EXIT_SKIP placeholder.
+tests_set_base.add(
+    when : zlib_dep,
+    if_true : files(
+        'crc/zpclmul.cpp',
+        'crc/zpclmul_rep.cpp',
+    )
+)
+
 
 # Gather/scatter tests. These are software-simulated gather/scatter using
 # plain double/int arrays and std::mt19937 — no x86 intrinsics, no arm_neon.h.
@@ -399,6 +420,29 @@ tests_set_base.add(
     )
 )
 
+# isa-l (libisal) CRC tests. The host ships /usr/lib/libisal.a (static) and
+# /usr/lib/libisal.so but no libisal.pc, so dependency('libisal') fails here;
+# use cpp.find_library('isal') instead (mirrors the reference tree). isal is a
+# portable C library with arch-optimised dispatch internally, so the 10 isal_*
+# tests build on all arches; required:false keeps the build working on hosts
+# without libisal installed.
+isal_lib = cpp.find_library('isal', required : false, static : true)
+tests_set_base.add(
+    when : isal_lib,
+    if_true : files(
+        'crc/isal_crc32_gzip.cpp',
+        'crc/isal_crc_ieee.cpp',
+        'crc/isal_crc_iscsi.cpp',
+        'crc/isal_crc_t10dif.cpp',
+        'crc/isal_crc64_ecma182_norm.cpp',
+        'crc/isal_crc64_ecma182_refl.cpp',
+        'crc/isal_crc64_iso_norm.cpp',
+        'crc/isal_crc64_iso_refl.cpp',
+        'crc/isal_crc64_jones_norm.cpp',
+        'crc/isal_crc64_jones_refl.cpp',
+    )
+)
+
 # Virtualization test suite (9 tests). Named after x86 VMX (Intel VT-x)
 # instructions, but on ARM64 there is no VT-x, so most tests are SIMULATED
 # (do a memory store+reload consistency check as a stand-in) or read an ARM64
@@ -447,6 +491,7 @@ tests_base_a = static_library(
         tests_config_base.dependencies(),
         boost_dep,
         atomic_lib,
+        isal_lib,
     ],
     c_args : [
         tests_common_c_args,
@@ -459,6 +504,38 @@ tests_base_a = static_library(
 sandstone_tests += [
     tests_base_a,
 ]
+
+# ARM ACLE CRC tests (tests/cpu/crc/crc32*.cpp). The __crc32b/h/w intrinsics
+# from <arm_acle.h> require the +crc extension, which the baseline build's
+# empty -march on aarch64 does not enable (armv8.1-a implies +crc). The
+# reference tree gets this for free because its top-level meson.build sets
+# march_base='armv8.1-a' globally on aarch64; this fork does not, so the 3
+# crc32* files live in a dedicated static_library compiled with
+# -march=armv8.1-a+crc. aarch64-only (the intrinsics are ARM); on other
+# arches the sources compile to a clean EXIT_SKIP placeholder via
+# #ifdef __aarch64__ guards, so the block is skipped entirely off-arm.
+if host_machine.cpu_family() == 'aarch64'
+    tests_crc_a = static_library(
+        'tests_crc',
+        sources : files(
+            'crc/crc32.cpp',
+            'crc/crc32_fixed.cpp',
+            'crc/crc32_fixed_shuffled.cpp',
+        ),
+        build_by_default: false,
+        include_directories : [
+            tests_common_incdirs,
+        ],
+        dependencies: [
+            boost_dep,
+        ],
+        cpp_args : [
+            tests_common_cpp_args,
+            '-march=armv8.1-a+crc',
+        ],
+    )
+    sandstone_tests += [tests_crc_a]
+endif
 
 if host_machine.cpu_family() == 'x86_64'
     march_hsw = [
