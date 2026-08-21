@@ -220,6 +220,27 @@ tests_set_base.add(
     )
 )
 
+
+# Gather/scatter tests. These are software-simulated gather/scatter using
+# plain double/int arrays and std::mt19937 — no x86 intrinsics, no arm_neon.h.
+# The x86 AVX-style names (gatherscatterpd/ps) are inherited from the
+# reference tree; the implementations are portable C++ that run identically
+# on both x86-64 and aarch64.
+tests_set_base.add(
+    files(
+        'gather/gather_f32.cpp',
+        'gather/gather_f64.cpp',
+        'gather/gather_i32.cpp',
+        'gather/gather_i64.cpp',
+        'gather/gatherscatter_f32.cpp',
+        'gather/gatherscatter_f64.cpp',
+        'gather/gatherscatter_i32.cpp',
+        'gather/gatherscatter_i64.cpp',
+        'gather/gatherscatterpd.cpp',
+        'gather/gatherscatterps.cpp',
+    )
+)
+
 # port/arm64-fma-tests
 # FMA test suite. Ported from the x86 AVX2/AVX-512 FMA tests to ARM NEON
 # vfma. The "avx2"/"avx512" suffixes are inherited x86 names; on aarch64 the
