@@ -399,6 +399,32 @@ tests_set_base.add(
     )
 )
 
+# Virtualization test suite (9 tests). Named after x86 VMX (Intel VT-x)
+# instructions, but on ARM64 there is no VT-x, so most tests are SIMULATED
+# (do a memory store+reload consistency check as a stand-in) or read an ARM64
+# system register (MIDR_EL1, CNTVCT_EL0) / run a cache-maintenance hint
+# (dc civac, yield) as the architectural counterpart. vmx_io_exit.cpp is the
+# only file with real x86 intrinsics (#include <immintrin.h>, _mm_mfence(),
+# inb/outb, cpuid); these are fully enclosed inside the x86-only #else branch
+# of an existing #ifdef __aarch64__ ... #else ... #endif, with an aarch64
+# simulated-consistency path under #ifdef __aarch64__ — so x86-64 is untouched
+# and ARM64 gets a real (non-skip) implementation. The other 8 files are plain
+# C++ with ARM64 inline asm (mrs/dc/yield) and __sync_synchronize() fences,
+# no x86 intrinsics, and build on all arches.
+tests_set_base.add(
+    files(
+        'virtualization/vmx_io_exit.cpp',
+        'virtualization/vmx_vmexit_cpuid.cpp',
+        'virtualization/vmx_vmexit_from_cr8.cpp',
+        'virtualization/vmx_vmexit_to_cr8.cpp',
+        'virtualization/vmx_vmexit_invd.cpp',
+        'virtualization/vmx_vmexit_pause.cpp',
+        'virtualization/vmx_vmexit_vmcall.cpp',
+        'virtualization/vmx_vmexit_to_dr7.cpp',
+        'virtualization/vmxmsr.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
 
 # libatomic provides the __atomic_load_16 / __atomic_store_16 /
