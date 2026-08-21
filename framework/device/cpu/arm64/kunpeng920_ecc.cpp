@@ -208,12 +208,12 @@ int Kunpeng920EccDetector::read_edac_errors(memory_error_stats *stats, int cpu)
         fclose(fp);
     }
 
-    snprintf(path, sizeof(path), "/sys/devices/system/edac/mc/mc%d/reset_counters", cpu);
-    fp = fopen(path, "w");
-    if (fp) {
-        fputc('1', fp);
-        fclose(fp);
-    }
+    // NOTE: do NOT write to reset_counters here. The previous code wrote '1'
+    // to /sys/devices/system/edac/mc/mcN/reset_counters after every read,
+    // which cleared the cumulative ce/ue counters — so the next read would
+    // return 0 until a new error arrived, defeating continuous RAS monitoring
+    // (the baseline interrupt_monitor.cpp reads ce_count+ue_count without
+    // resetting). The EDAC counters are cumulative by design; leave them.
 
     snprintf(stats->dimm_name, sizeof(stats->dimm_name), "EDAC_MC%d", cpu);
     snprintf(stats->dimm_id, sizeof(stats->dimm_id), "mc%d", cpu);
@@ -298,18 +298,17 @@ int Kunpeng920EccDetector::read_vendor_errors(memory_error_stats *stats, int cpu
 
     ras_data.cpu = static_cast<uint32_t>(cpu);
 
-    ssize_t ret = ioctl(fd, 0, &ras_data);
-    if (ret >= 0) {
-        stats->ce_count = ras_data.ce_count;
-        stats->ue_count = ras_data.ue_count;
-    }
-
+    // The vendor RAS char drivers (/dev/hisi_ras etc.) expose errors via an
+    // ioctl, but the command number is not publicly specified in any header
+    // on this board. The previous code called ioctl(fd, 0, &ras_data) with a
+    // magic command of 0, which is not a valid HISI RAS command and returns
+    // ENOTTY — a silent no-op that reported all-zero stats. Until the real
+    // command number is known (from the vendor RAS driver header), do not
+    // issue a bogus ioctl: skip the vendor path and let the caller fall back
+    // to the EDAC sysfs path (read_edac_errors) which works on this board.
+    (void)fd;
     close(fd);
-
-    snprintf(stats->dimm_name, sizeof(stats->dimm_name), "VendorRAS");
-    snprintf(stats->dimm_id, sizeof(stats->dimm_id), "hisi_ras");
-
-    return 0;
+    return -1;
 }
 
 int Kunpeng920EccDetector::read_errors(memory_error_stats *stats, int cpu)
