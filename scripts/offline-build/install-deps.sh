@@ -33,6 +33,10 @@ if [ ! -d "$RPMDIR" ]; then
     exit 1
 fi
 
+# 转成绝对路径: 后面会 cd 进去, 若保留相对路径则 cd 后所有基于 $RPMDIR 的
+# 查找 (如 .os-version、find $RPMDIR) 都会因 CWD 变更而失效。
+RPMDIR="$(cd "$RPMDIR" && pwd)"
+
 cd "$RPMDIR"
 
 # ---- 版本管控: 严格比对下载标记与目标机版本 ----
