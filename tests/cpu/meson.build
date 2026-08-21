@@ -57,6 +57,27 @@ if host_machine.cpu_family() == 'aarch64'
     )
 endif
 
+# Vector test suite: NEON-backed counterparts of the x86 AVX-512 k-register
+# (mask register) and swizzle/insert-extract tests. The 5 files that use
+# <arm_neon.h> (insert_extract, swizzle, kreg1, kreg4, kreg7) self-skip with
+# EXIT_SKIP on non-AArch64 via an #ifdef __aarch64__ guard; the other 6
+# (kreg2/3/5/6/8/9) are pure scalar integer simulations and build everywhere.
+tests_set_base.add(
+    files(
+        'vector/swizzle.cpp',
+        'vector/insert_extract.cpp',
+        'vector/kreg1.cpp',
+        'vector/kreg2.cpp',
+        'vector/kreg3.cpp',
+        'vector/kreg4.cpp',
+        'vector/kreg5.cpp',
+        'vector/kreg6.cpp',
+        'vector/kreg7.cpp',
+        'vector/kreg8.cpp',
+        'vector/kreg9.cpp',
+    )
+)
+
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
         when : crypto_dep,
