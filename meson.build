@@ -255,9 +255,21 @@ pthread_dep = dependency('threads')
 
 dl_dep = []
 gtest_dep = []
+libatomic_dep = []
 if target_machine.system() != 'windows'
     dl_dep = cc.find_library('dl')
     gtest_dep = dependency('gtest_main', required: false)
+endif
+
+# On aarch64, std::atomic<__int128> (used by the spinlock_stress_cmpxchg16b
+# test for 128-bit CAS) lowers to calls to the libatomic runtime helpers
+# (__atomic_load_16 / __atomic_store_16 / __atomic_compare_exchange_16).
+# There is no "-mcx16" on aarch64 GCC to force them inline, so link libatomic
+# on non-x86-64 hosts. x86-64 builds its 128-bit atomics inline via -mcx16-style
+# LOCK CMPXCHG16B (enabled by march flags) and does not need this, so it is
+# left untouched.
+if host_machine.cpu_family() != 'x86_64'
+    libatomic_dep = cc.find_library('atomic', required: false)
 endif
 
 if get_option('coverage') == true
@@ -276,6 +288,7 @@ endif
 target_deps += [
     boost_dep,
     dl_dep,
+    libatomic_dep,
     pthread_dep,
 ]
 
