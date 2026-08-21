@@ -455,6 +455,12 @@ tests_set_base.add(
 # (e.g. x86-64) every _run is compiled out via #ifdef __aarch64__ and returns
 # EXIT_SKIP from init with "to be implemented (placeholder): ARM NEON FMA
 # required", so the suite is built on all arches but only executes on ARM64.
+#
+# fpu_special_values: FPU special-value sweep (the "版图一.1 操作数空间" floating-
+# point gap). The fmatail_* variants inject only {0,1,-1,+Inf}; this test sweeps
+# the full IEEE-754 special table {qNaN,sNaN,±Inf,±0,±min_denorm,±max/±min normal}
+# through NEON vfmaq and compares byte-exact vs fma()/fmaf() (a 1-bit ULP flip is
+# caught, unlike the tolerance-based comparison in fma.cpp / fma_patterns_*).
 tests_set_base.add(
     files(
         'fma/fma.cpp',
@@ -468,6 +474,7 @@ tests_set_base.add(
         'fma/fmatail_double_nested_avx512.cpp',
         'fma/fmatail_nested_avx2.cpp',
         'fma/fmatail_nested_avx512.cpp',
+        'fma/fpu_special_values.cpp',
     )
 )
 
