@@ -75,13 +75,23 @@ int mce_check_run(struct test *test, int thread)
     // check the CPUs we were running tests on
     for (int i = 0; i < thread_count(); ++i) {
         // translate our thread number to the OS CPU number
-        thread = device_info[i].cpu_number;
-        assert(thread < int(differences.size()));
+        int os_cpu = device_info[i].cpu_number;
+        // Bound-check for real: the original code used assert() here, which
+        // is compiled out under -DNDEBUG (release), so a CPU whose
+        // cpu_number falls outside the counts vector would read out of
+        // bounds. Guard explicitly and skip (with a platform warning) if
+        // the topology/EDAC data doesn't cover it, rather than UB.
+        if (os_cpu < 0 || os_cpu >= int(differences.size())) {
+            log_platform_message(SANDSTONE_LOG_WARNING
+                "mce_check: OS CPU %d not covered by interrupt counts (size %zu), skipping",
+                os_cpu, differences.size());
+            continue;
+        }
 
-        if (differences[thread] != 0) {
+        if (differences[os_cpu] != 0) {
             log_message(i, SANDSTONE_LOG_ERROR "MCE detected (%u interrupts since start)",
-                        differences[thread]);
-            differences[thread] = 0;
+                        differences[os_cpu]);
+            differences[os_cpu] = 0;
             ++errorcount;
         }
     }
