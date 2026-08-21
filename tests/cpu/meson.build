@@ -67,6 +67,14 @@ tests_set_base.add(
         'memory/vmovnt2_vex.cpp',
         'memory/vmovnt3.cpp',
         'memory/vmovnt3_vex.cpp',
+        # MMU/TLB targeted stress test ("版图二 脆弱性驱动的靶向施压"). Stresses
+        # the ARM64 page-table-walker state machine via forced TLB misses
+        # (madvise MADV_DONTNEED), cross-page-boundary accesses, unaligned
+        # accesses and stride sweeps; detects silent MMU/translation
+        # corruption via byte-exact golden compare. The run path is compiled
+        # out under #ifdef __aarch64__ and returns a clean EXIT_SKIP on
+        # non-aarch64 (x86-64 untouched).
+        'memory/mmu_stress_arm.cpp',
         # Cache coherency / stress tests. cachebounce is portable (std::atomic);
         # cache_stress_aggressor uses ARM NEON under #ifdef __aarch64__ guards and
         # returns a clean EXIT_SKIP on non-aarch64 (x86-64 untouched).
