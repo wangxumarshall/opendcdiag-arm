@@ -2,15 +2,29 @@
 # install-deps.sh — 在无网络的 openEuler 24.03 SP3 目标机上, 离线安装由
 # download-deps.sh 下载的全部 RPM。
 #
-# 用法 (在本脚本所在目录下, 与 RPM 同目录执行):
+# 用法:
 #   ./install-deps.sh [RPM目录]
+#
+# 默认从 download-deps.sh 的输出目录 ./opendcdiag-rpms 安装; 也可显式指定
+# RPM 所在目录作为第一个参数。
 set -euo pipefail
 
-RPMDIR="${1:-$(pwd)}"
+# 默认指向 download-deps.sh 的输出目录 (它在有网机上默认输出到
+# $(pwd)/opendcdiag-rpms)。用户可传入第一个参数覆盖。
+RPMDIR="${1:-$(pwd)/opendcdiag-rpms}"
+
+if [ ! -d "$RPMDIR" ]; then
+    echo "错误: RPM 目录不存在: $RPMDIR" >&2
+    echo "       用法: $0 [RPM目录]  (默认 ./opendcdiag-rpms)" >&2
+    echo "       若尚未下载, 先在有网机上运行 download-deps.sh。" >&2
+    exit 1
+fi
+
 cd "$RPMDIR"
 
 if ! ls ./*.rpm >/dev/null 2>&1; then
     echo "错误: $RPMDIR 下未找到 .rpm 文件" >&2
+    echo "       先在有网机上运行 download-deps.sh 下载依赖。" >&2
     exit 1
 fi
 
