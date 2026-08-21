@@ -18,6 +18,11 @@ if host_machine.cpu_family() == 'aarch64'
     arm64_tests = files(
         'neon_test.cpp',
         'crypto_test.cpp',
+        # di/dt voltage-transient power virus ("版图三 瞬态故障动态激发").
+        # Alternates NEON full-load bursts with yield stalls to induce voltage
+        # droop and excite transient SDC on the SIMD/FMA path — the only
+        # burst/stall power-virus in the suite. Built only on aarch64.
+        'power_virus_dit.cpp',
         'sdc_test.cpp',
     )
 
