@@ -39,7 +39,13 @@ struct hw_access_ops
     const char *backend_name;
 };
 
-struct hw_access_ops *arm64_get_hw_access_ops(void);
-int arm64_hw_init(void);
+// NOTE: the free-function prototypes that were declared here
+// (arm64_get_hw_access_ops, arm64_hw_init) had no definition anywhere in the
+// tree — they would link-fail if called, and the hw_access_ops struct (a
+// hardware-access abstraction shaped after x86 MSR access) is currently
+// unused: ARM64 has no userspace MSR interface, and the working ECC/RAS
+// path goes directly through Kunpeng920EccDetector. The struct definition is
+// kept (it documents the abstraction) but the unimplemented accessors are
+// removed to avoid misleading callers.
 
 #endif // ARM64_PRIVILEGE_H
