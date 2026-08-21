@@ -1432,7 +1432,7 @@ const static test_group group_test_is_optional = {
     .description = "Self-tests used to test test_is_optional flag"
 };
 
-#if defined(__x86_64__) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
+#if (defined(__x86_64__) || defined(__aarch64__)) && !defined(__clang__) && defined(SANDSTONE_DEVICE_CPU)
 const static test_group group_test_hw_features = {
     .id = "test_hw_features",
     .description = "Self-tests that depend on CPU features"
@@ -2698,6 +2698,72 @@ FOREACH_DATATYPE(DATACOMPARE_TEST)
     .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
     .test_run = selftest_pass_run,
     .minimum_cpu = cpu_diamondrapids,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+#endif
+#if defined(__aarch64__) && defined(SANDSTONE_DEVICE_CPU)
+// ARM64 HWCAP feature-gating robustness selftests, the counterpart of the x86
+// selftest_test_*_min_cpu series above. These do NOT compute anything or compare
+// golden values; they assert that the framework's minimum_cpu gate (driven by
+// the generated cpu_features.h / HWCAP-based device_has_feature()) admits or
+// cleanly skips tests per the advertised ARM feature. A gate misjudgement would
+// either skip a test that should run (missed coverage) or run one that should
+// not (SIGILL crash) -- both are framework robustness defects, not silicon
+// issues. On a host that has the feature the test passes; on one that lacks it
+// the framework must report a clean EXIT_SKIP (never a crash), mirroring how
+// real ARM64 tests (e.g. crypto_test, svd_cdouble_sve) gate themselves.
+{
+    .id = "selftest_test_arm_asimd_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_feature_asimd (ARMv8.0 baseline NEON)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_asimd,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_arm_crc32_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_feature_crc32 (ACLE __crc32*)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_crc32,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_arm_aes_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_feature_aes (AES crypto)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_aes,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_arm_sve_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_feature_sve (Scalable Vector Extension)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_sve,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_arm_bf16_min_cpu",
+    .description = "Tests prod test with min_cpu_level set to cpu_feature_bf16 (BFloat16)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_bf16,
+    .desired_duration = -1,
+    .quality_level = TEST_QUALITY_PROD,
+},
+{
+    .id = "selftest_test_arm_unsatisfiable_min_cpu",
+    .description = "Tests that an unsatisfiable ARM min_cpu_level cleanly skips (SVE2p1 is absent on this host)",
+    .groups = DECLARE_TEST_GROUPS(&group_test_hw_features),
+    .test_run = selftest_pass_run,
+    .minimum_cpu = cpu_feature_sve2p1,
     .desired_duration = -1,
     .quality_level = TEST_QUALITY_PROD,
 },
