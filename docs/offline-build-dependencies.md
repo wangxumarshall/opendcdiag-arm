@@ -161,13 +161,11 @@ ninja -C builddir
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。
 6. **磁盘空间**：完整构建（含 SVE/NEON 多后端）产物约 256 MB 单二进制 + 中间 `.a`，建议 builddir 所在盘预留 ≥ 2 GB。
 7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）、initramfs 链（`dracut`、`os-prober`、`kpartx`、`device-mapper`、`fuse`）及系统核心（`glibc`、`systemd`、`pam`、`setup`、`filesystem`、`basesystem`、`shadow`、`openEuler-release` 等）。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。OpenDCDiag 构建完全不依赖这些包。
-   **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf：
-   ```bash
-   EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|kpartx|device-mapper|fuse|glibc|glibc-common|glibc-devel|glibc-headers|systemd|systemd-libs|systemd-udev|setup|filesystem|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg-keys|openEuler-repos)'
-   sudo dnf install -y --disablerepo=* \
-       $(find . -maxdepth 1 -name '*.rpm' -printf '%p\n' | grep -ivE "$EXCLUDE_RE" | sort)
-   ```
-   `install-deps.sh` 已内置这套 shell 过滤。若仍有个别受保护包冲突，把它的前缀加进 `EXCLUDE_RE`；或用 `--allowerasing` 允许替换（注意：会改动系统关键包，离线环境有风险）；或退回 `rpm -Uvh --nodeps --force` 仅强装工具链。
+   **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf。`install-deps.sh` 已内置：按前缀静态排除受保护/无关系统包，再对每个剩余 RPM 用 `rpm -q` 检测目标机是否已装同名包，已装即跳过（保留目标机版本，避免降级冲突）。
+
+8. **下载机与目标机 openEuler 版本不一致（SP3 下载、SP4 目标）**：这是离线构建最隐蔽的坑。当两机版本不同时，下载树里的 `audit-libs`/`openssl-libs`/`rpm`/`cyrus-sasl-lib`/`openssl-pkcs11` 等 RPM 比目标机已装的旧，dnf 拒绝降级且目标机的 `bind-libs`/`rng-tools`/`opensc`/`trousers`/`python3-rpm` 等依赖更新版 → 冲突；更棘手的是 `glibc-devel`（SP3）精确 `Requires: glibc = 2.38-84.sp3`，装到 SP4 会要求降级 glibc 触发 protected 冲突，而不装则 gcc/libxcrypt-devel 缺依赖。
+   - **正解**：在与目标机**同版本**的 openEuler（如 SP4）机器上重跑 `download-deps.sh` 重新下载 RPM 树，保证版本一致。
+   - **兜底**：`install-deps.sh` 会自动跳过目标机已装的包（`skip_if_installed`），解决大部分降级冲突；但 `glibc-devel` 若目标机未装仍会尝试装 SP3 版并失败，此时用方案 4 的 `sudo rpm -Uvh --nodeps --force "${KEEP[@]}"` 强装工具链跳过精确版本约束（gcc 实际不链接 glibc-devel 的 `.so`，只编译期需要头文件，目标机若有 `/usr/include` 的 glibc 头即可用）。
 
 ---
 
