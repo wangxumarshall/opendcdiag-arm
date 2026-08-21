@@ -67,6 +67,27 @@ tests_set_base.add(
         'memory/vmovnt2_vex.cpp',
         'memory/vmovnt3.cpp',
         'memory/vmovnt3_vex.cpp',
+        # Cache coherency / stress tests. cachebounce is portable (std::atomic);
+        # cache_stress_aggressor uses ARM NEON under #ifdef __aarch64__ guards and
+        # returns a clean EXIT_SKIP on non-aarch64 (x86-64 untouched).
+        'cache/cachebounce.cpp',
+        'cache/cache_stress_aggressor.cpp',
+    )
+)
+
+# Lock test suite (9 tests, std::atomic/std::atomic_flag-based, no x86
+# intrinsics, no inline asm — portable C++ that builds on all arches).
+tests_set_base.add(
+    files(
+        'lock/lockgen.cpp',
+        'lock/lock_instr.cpp',
+        'lock/lockless_cmpxchg.cpp',
+        'lock/lockless_cmpxchg8b.cpp',
+        'lock/lockless_cmpxchg16b.cpp',
+        'lock/locks.cpp',
+        'lock/locks_ccb.cpp',
+        'lock/locks_ccb_xch_only.cpp',
+        'lock/locks_xch_only.cpp',
     )
 )
 
@@ -79,6 +100,24 @@ if host_machine.cpu_family() == 'aarch64'
         )
     )
 endif
+
+# Atomic / memory-ordering test suite. The NEON-backed variants
+# (atomic_simd_128/256/512) guard their ARM SIMD usage with #ifdef
+# __aarch64__ and return a clean placeholder skip on other arches
+# (CLAUDE.md placeholder-test honesty). atomic_seq_cst and atomic_simd_128
+# (which uses the portable __int128 extension, not NEON) build on all
+# arches. The two *_unaligned SIMD tests are kept commented out, matching
+# the reference tree's selection.
+tests_set_base.add(
+    files(
+        'atomic/atomic_simd_128.cpp',
+        #'atomic/atomic_simd_128_unaligned.cpp',
+        'atomic/atomic_simd_256.cpp',
+        #'atomic/atomic_simd_256_unaligned.cpp',
+        'atomic/atomic_simd_512.cpp',
+        'atomic/atomic_seq_cst.cpp',
+    )
+)
 
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
@@ -118,8 +157,11 @@ tests_set_base.add(
     if_true : files(
         'eigen_gemm/double14.cpp',
         'eigen_gemm/gemm_cdouble_dynamic_square.cpp',
+        'eigen_gemm/gemm_cdouble_dynamic_square_dump.cpp',
         'eigen_gemm/gemm_double_dynamic_square.cpp',
+        'eigen_gemm/gemm_double_dynamic_square_dump.cpp',
         'eigen_gemm/gemm_float_dynamic_square.cpp',
+        'eigen_gemm/gemm_float_dynamic_square_dump.cpp',
         'eigen_sparse/eigen_sparse.cpp',
         'eigen_svd/svd.cpp',
         'eigen_svd/svd_cdouble_noavx512.cpp',
@@ -178,7 +220,67 @@ tests_set_base.add(
     )
 )
 
+# port/arm64-fma-tests
+# FMA test suite. Ported from the x86 AVX2/AVX-512 FMA tests to ARM NEON
+# vfma. The "avx2"/"avx512" suffixes are inherited x86 names; on aarch64 the
+# implementations use NEON float32x4_t/float64x2_t vfmaq. On non-aarch64
+# (e.g. x86-64) every _run is compiled out via #ifdef __aarch64__ and returns
+# EXIT_SKIP from init with "to be implemented (placeholder): ARM NEON FMA
+# required", so the suite is built on all arches but only executes on ARM64.
+tests_set_base.add(
+    files(
+        'fma/fma.cpp',
+        'fma/fma_patterns_avx512_pd.cpp',
+        'fma/fma_patterns_avx512_ps.cpp',
+        'fma/fma_tail_avx2.cpp',
+        'fma/fma_tail_avx512.cpp',
+        'fma/fmatail_avx2.cpp',
+        'fma/fmatail_avx512.cpp',
+        'fma/fmatail_double_nested_avx2.cpp',
+        'fma/fmatail_double_nested_avx512.cpp',
+        'fma/fmatail_nested_avx2.cpp',
+        'fma/fmatail_nested_avx512.cpp',
+    )
+)
+
+# Spinlock stress suite. The tests are std::atomic-based (no x86 intrinsics,
+# no arm_neon.h) and portable across both reference architectures: aarch64
+# uses an ARM "yield" hint in the spin loop, x86-64 an "rep nop" (encoded as
+# the "pause" mnemonic) hint. Both are guarded per-arch inside each source
+# file, so the whole set builds unconditionally on tests_set_base.
+tests_set_base.add(
+    files(
+        'spinlock/spinlock_array.cpp',
+        'spinlock/spinlock_bank.cpp',
+        'spinlock/spinlock_crosses_cacheline.cpp',
+        'spinlock/spinlock_cross_socket.cpp',
+        'spinlock/spinlock_mini.cpp',
+        'spinlock/spinlock_randomsweep.cpp',
+        'spinlock/spinlock_rmw_cmpxchg.cpp',
+        'spinlock/spinlock_rmw_cmpxchg_pause.cpp',
+        'spinlock/spinlock_rmw_xchg.cpp',
+        'spinlock/spinlock_rmw_xchg_pause.cpp',
+        'spinlock/spinlock_same_core.cpp',
+        'spinlock/spinlock_stress.cpp',
+        'spinlock/spinlock_stress_bts.cpp',
+        'spinlock/spinlock_stress_cmpxchg.cpp',
+        'spinlock/spinlock_stress_cmpxchg16b.cpp',
+        'spinlock/spinlock_stress_cmpxchg_even_odd.cpp',
+        'spinlock/spinlock_unaligned.cpp',
+        'spinlock/spinlock_with_hle.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
+
+# libatomic provides the __atomic_load_16 / __atomic_store_16 /
+# __atomic_compare_exchange_16 runtime symbols that the C++ standard library
+# emits for std::atomic<unsigned __int128> (a 128-bit CAS, used by the
+# lockless_cmpxchg16b test). AArch64's base ISA has no single 128-bit CAS
+# instruction, so GCC lowers it to a libatomic call; x86-64 likewise emits
+# these calls unless compiled with -mcx16. required:false keeps the build
+# working on toolchains that inline 128-bit atomics natively.
+atomic_lib = cc.find_library('atomic', required : false)
 
 tests_base_a = static_library(
     'tests_base',
@@ -190,6 +292,7 @@ tests_base_a = static_library(
     dependencies: [
         tests_config_base.dependencies(),
         boost_dep,
+        atomic_lib,
     ],
     c_args : [
         tests_common_c_args,
@@ -321,3 +424,7 @@ if host_machine.cpu_family() == 'aarch64'
         sandstone_tests += [tests_sve_a]
     endif
 endif
+
+# ARM64-native NEON + crypto (AES) tests. The subdir guards the actual build
+# behind `if host_machine.cpu_family() == 'aarch64'` so x86-64 is untouched.
+subdir('arm64')
