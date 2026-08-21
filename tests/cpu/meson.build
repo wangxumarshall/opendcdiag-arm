@@ -47,6 +47,22 @@ tests_set_base.add(
     )
 )
 
+# Lock test suite (9 tests, std::atomic/std::atomic_flag-based, no x86
+# intrinsics, no inline asm — portable C++ that builds on all arches).
+tests_set_base.add(
+    files(
+        'lock/lockgen.cpp',
+        'lock/lock_instr.cpp',
+        'lock/lockless_cmpxchg.cpp',
+        'lock/lockless_cmpxchg8b.cpp',
+        'lock/lockless_cmpxchg16b.cpp',
+        'lock/locks.cpp',
+        'lock/locks_ccb.cpp',
+        'lock/locks_ccb_xch_only.cpp',
+        'lock/locks_xch_only.cpp',
+    )
+)
+
 # ARM64-native In-Silicon Test (IST), the counterpart of Intel IFS on x86.
 # Only built on aarch64; on x86 the IFS tests above provide the equivalent.
 if host_machine.cpu_family() == 'aarch64'
@@ -160,6 +176,15 @@ tests_set_base.add(
 
 tests_config_base = tests_set_base.apply(tests_config)
 
+# libatomic provides the __atomic_load_16 / __atomic_store_16 /
+# __atomic_compare_exchange_16 runtime symbols that the C++ standard library
+# emits for std::atomic<unsigned __int128> (a 128-bit CAS, used by the
+# lockless_cmpxchg16b test). AArch64's base ISA has no single 128-bit CAS
+# instruction, so GCC lowers it to a libatomic call; x86-64 likewise emits
+# these calls unless compiled with -mcx16. required:false keeps the build
+# working on toolchains that inline 128-bit atomics natively.
+atomic_lib = cc.find_library('atomic', required : false)
+
 tests_base_a = static_library(
     'tests_base',
     sources : tests_config_base.sources(),
@@ -170,6 +195,7 @@ tests_base_a = static_library(
     dependencies: [
         tests_config_base.dependencies(),
         boost_dep,
+        atomic_lib,
     ],
     c_args : [
         tests_common_c_args,
