@@ -74,8 +74,13 @@ crt_builtins_lib = declare_dependency(
 # The 3 AOR tests are intentionally excluded (see header comment).
 # ---------------------------------------------------------------------------
 
-# 7 GMP-backed tests: adcx_arm, adox_arm, adcxlong_arm, adcx_adox_interleaved_arm,
-# bigint_mulx_arm, gmp_bigadd, gmp_bignum.
+# 8 GMP-backed tests: adcx_arm, adox_arm, adcxlong_arm, adcx_adox_interleaved_arm,
+# bigint_mulx_arm, gmp_bigadd, gmp_bignum, operand_space_arm.
+# operand_space_arm is the operand-space SDC stressor: it feeds the ARM64
+# adder/carry-chain/multiplier a deterministic high-Hamming-distance operand
+# table (0x0000...<->0xFFFF... alternating, walking-one) instead of uniform
+# random, to force maximum per-cycle gate toggling (the "版图一.1 操作数空间"
+# coverage dimension that uniform-random operands miss).
 gmp_sources = files(
     'adcx_arm.cpp',
     'adcxlong_arm.cpp',
@@ -84,6 +89,7 @@ gmp_sources = files(
     'bigint_mulx_arm.cpp',
     'gmp_bigadd.cpp',
     'gmp_bignum.cpp',
+    'operand_space_arm.cpp',
 )
 
 # 2 ACL-backed tests: acl_gemm (NEON GEMM), fisttp_arm (FCVTZS cast).
