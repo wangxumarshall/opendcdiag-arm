@@ -21,9 +21,13 @@
  * The hardware path runs the big-integer add through GMP (mp_add, which lowers
  * to ADCS), and a 64x64->128 UMULL via mpz_mul; the golden is precomputed in
  * test_init using pure __int128 software simulation. Each run compares the
- * hardware result against the golden with a per-word byte-exact check plus a
- * store/reload consistency check. No per-iteration logging (avoids the
- * timing-perturbation hazard seen in adcx_arm.cpp:186 / adcxlong.cpp:162).
+ * hardware result against the golden with a per-word byte-exact check, a
+ * real store-to-load-forwarding probe (inline-asm str then ldr to the same
+ * buffer — the store buffer satisfying the subsequent load, a corruption-prone
+ * datapath), and a full 128-bit multiply check (both UMULL-low and UMULH-high
+ * halves, the high half being a timing-critical path). No per-iteration
+ * logging (avoids the timing-perturbation hazard seen in adcx_arm.cpp:186 /
+ * adcxlong.cpp:162).
  *
  * ARM64-native (GMP is consumed on aarch64); the whole subdir is entered only
  * under the aarch64 guard in tests/cpu/meson.build, so x86-64 is untouched.
@@ -40,8 +44,10 @@
 // 256-bit big integer = 4 x 64-bit words.
 static constexpr size_t NUM_WORDS = 4;
 // Number of (a, b) operand pairs derived from the high-Hamming table.
-// The table is small and deterministic; we cycle through it.
-static constexpr size_t NUM_PAIRS = 64;
+// Set to the table size so one pass cycles through every entry (the high-bit
+// walking-one values at the tail of the table are otherwise unreached in a
+// NUM_PAIRS < table-size cycle).
+static constexpr size_t NUM_PAIRS = 80;
 
 // ============================================================================
 // High-Hamming-distance operand table.
@@ -120,14 +126,31 @@ static const uint64_t HAMMING_TABLE[] = {
     0x0000200000000000ULL,
     0x0000400000000000ULL,
     0x0000800000000000ULL,
+    0x0001000000000000ULL,
+    0x0002000000000000ULL,
+    0x0004000000000000ULL,
+    0x0008000000000000ULL,
+    0x0010000000000000ULL,
+    0x0020000000000000ULL,
+    0x0040000000000000ULL,
+    0x0080000000000000ULL,
+    0x0100000000000000ULL,
+    0x0200000000000000ULL,
+    0x0400000000000000ULL,
+    0x0800000000000000ULL,
+    0x1000000000000000ULL,
+    0x2000000000000000ULL,
+    0x4000000000000000ULL,
+    0x8000000000000000ULL,
 };
 static constexpr size_t HAMMING_TABLE_SIZE = sizeof(HAMMING_TABLE) / sizeof(HAMMING_TABLE[0]);
 
 struct OperandSpaceData {
     std::vector<uint64_t> a_words;        // NUM_PAIRS * NUM_WORDS
     std::vector<uint64_t> b_words;       // NUM_PAIRS * NUM_WORDS
-    std::vector<uint64_t> golden_add;    // NUM_PAIRS * (NUM_WORDS + 1)  (with carry-out)
+    std::vector<uint64_t> golden_add;     // NUM_PAIRS * (NUM_WORDS + 1)  (with carry-out)
     std::vector<uint64_t> golden_mul_lo;  // NUM_PAIRS (low 64 bits of a[0]*b[0])
+    std::vector<uint64_t> golden_mul_hi;  // NUM_PAIRS (high 64 bits of a[0]*b[0]) — UMULH path
     size_t num_pairs;
 };
 
@@ -157,6 +180,53 @@ static inline void fill_operand(uint64_t *dst, uint64_t base_word)
         dst[i] = base_word;
 }
 
+// ----------------------------------------------------------------------------
+// Store-to-load-forwarding probe. The previous version did a software
+// memcpy(store_buf, hw) then memcpy(reload_buf, store_buf) and compared — that
+// is a memory-to-memory copy through the compiler/regalloc, NOT a hardware
+// store->load forward; the store-load forwarding datapath (the store buffer
+// satisfying a subsequent load to the same address before it hits L1) was never
+// actually exercised. Here we issue a real store then a real load to the same
+// address via inline asm with a "memory" clobber, defeating the optimizer so
+// the store and load are emitted as separate str/ldr micro-ops hitting the
+// store buffer. On non-aarch64 we fall back to a plain store+load (still a real
+// memory round-trip, unlike the memcpy version).
+// ----------------------------------------------------------------------------
+#if defined(__aarch64__)
+static inline uint64_t slf_probe(const uint64_t *src, uint64_t *buf, size_t n)
+{
+    // 1. Copy src -> buf via stores (str).
+    for (size_t i = 0; i < n; ++i) {
+        __asm__ volatile("str %1, [%0, %2]"
+                         : : "r"(buf), "r"(src[i]), "r"(i * sizeof(uint64_t))
+                         : "memory");
+    }
+    // 2. Sum-reload every element via loads (ldr) from buf — each load is
+    //    satisfied by the just-written store buffer entry (store-to-load
+    //    forwarding). A fault in the forwarding path corrupts the sum.
+    uint64_t acc = 0;
+    for (size_t i = 0; i < n; ++i) {
+        uint64_t v;
+        __asm__ volatile("ldr %0, [%1, %2]"
+                         : "=r"(v)
+                         : "r"(buf), "r"(i * sizeof(uint64_t))
+                         : "memory");
+        acc += v;
+    }
+    return acc;
+}
+#else
+static inline uint64_t slf_probe(const uint64_t *src, uint64_t *buf, size_t n)
+{
+    for (size_t i = 0; i < n; ++i)
+        buf[i] = src[i];
+    uint64_t acc = 0;
+    for (size_t i = 0; i < n; ++i)
+        acc += buf[i];
+    return acc;
+}
+#endif
+
 static int operand_space_arm_init(struct test *test)
 {
     try {
@@ -166,6 +236,7 @@ static int operand_space_arm_init(struct test *test)
         data->b_words.resize(NUM_PAIRS * NUM_WORDS);
         data->golden_add.resize(NUM_PAIRS * (NUM_WORDS + 1));
         data->golden_mul_lo.resize(NUM_PAIRS);
+        data->golden_mul_hi.resize(NUM_PAIRS);
 
         // Generate operand pairs by cycling through the high-Hamming table.
         // Successive pairs pick complementary table entries (i and i+1 mod N)
@@ -188,11 +259,14 @@ static int operand_space_arm_init(struct test *test)
             memcpy(&data->golden_add[i * (NUM_WORDS + 1)], sum,
                    (NUM_WORDS + 1) * sizeof(uint64_t));
 
-            // Golden: 64x64->128 multiply low word (UMULL path). We only keep
-            // the low 64 bits for a deterministic check; the full 128-bit
-            // product low word is the bottom half of (unsigned __int128)a[0]*b[0].
+            // Golden: full 64x64->128 multiply low word (UMULL low + UMULH high).
+            // Keeping BOTH halves exercises the full multiplier partial-product
+            // network — the high 64 bits are non-trivial (e.g. 0xFF..*0xFF.. ->
+            // hi=0xFF..FE) and are a timing-critical path the low-only check
+            // missed entirely.
             unsigned __int128 prod = (unsigned __int128)a[0] * (unsigned __int128)b[0];
             data->golden_mul_lo[i] = (uint64_t)prod;
+            data->golden_mul_hi[i] = (uint64_t)(prod >> 64);
         }
 
         test->data = data.release();
@@ -239,41 +313,53 @@ static int operand_space_arm_run(struct test *test, int cpu)
             const uint64_t *golden = &td->golden_add[i * (NUM_WORDS + 1)];
             bool data_ok = (memcmp(hw_words, golden, (NUM_WORDS + 1) * sizeof(uint64_t)) == 0);
 
-            // ---- Store/reload consistency check (store-load forwarding path).
-            uint64_t store_buf[NUM_WORDS + 1];
-            uint64_t reload_buf[NUM_WORDS + 1];
-            memcpy(store_buf, hw_words, (NUM_WORDS + 1) * sizeof(uint64_t));
-            memcpy(reload_buf, store_buf, (NUM_WORDS + 1) * sizeof(uint64_t));
-            bool consistent = (memcmp(reload_buf, hw_words,
-                                     (NUM_WORDS + 1) * sizeof(uint64_t)) == 0);
+            // ---- Store-to-load-forwarding probe. Issue real str then ldr to
+            // the same buffer (inline asm + "memory" clobber so the optimizer
+            // cannot fuse/elide them); the reloads are satisfied by the store
+            // buffer (store-to-load forwarding), a corruption-prone datapath the
+            // previous software memcpy never touched. Golden = sum of the add
+            // result words; a corrupted forward produces a different sum.
+            uint64_t slf_buf[NUM_WORDS + 1];
+            uint64_t slf_golden = 0;
+            for (size_t w = 0; w < NUM_WORDS + 1; ++w)
+                slf_golden += hw_words[w];
+            uint64_t slf_got = slf_probe(hw_words, slf_buf, NUM_WORDS + 1);
+            bool consistent = (slf_got == slf_golden);
 
-            // ---- Hardware path: 64x64->128 UMULL low word via mpz_mul on the
+            // ---- Hardware path: full 64x64->128 multiply via mpz_mul on the
             // low limbs. mpz_mul of two 1-limb values exercises the 64x64
-            // multiply path; we check the low 64 bits against the golden.
-            mpz_t a_lo, b_lo, mul_lo;
-            mpz_init(a_lo); mpz_init(b_lo); mpz_init(mul_lo);
+            // multiplier; we export BOTH 64-bit halves and check each against
+            // the golden — the high half (UMULH) is a timing-critical path
+            // the low-only check missed entirely.
+            mpz_t a_lo, b_lo, mul_full;
+            mpz_init(a_lo); mpz_init(b_lo); mpz_init(mul_full);
             mpz_import(a_lo, 1, -1, sizeof(uint64_t), 0, 0, &a_words[0]);
             mpz_import(b_lo, 1, -1, sizeof(uint64_t), 0, 0, &b_words[0]);
-            mpz_mul(mul_lo, a_lo, b_lo);
-            uint64_t hw_mul_lo = 0;
+            mpz_mul(mul_full, a_lo, b_lo);
+            // 128-bit export into two little-endian limbs.
+            uint64_t hw_mul[2] = {0, 0};
             size_t mcount;
-            mpz_export(&hw_mul_lo, &mcount, -1, sizeof(uint64_t), 0, 0, mul_lo);
-            bool mul_ok = (hw_mul_lo == td->golden_mul_lo[i]);
-            mpz_clear(a_lo); mpz_clear(b_lo); mpz_clear(mul_lo);
+            mpz_export(hw_mul, &mcount, -1, sizeof(uint64_t), 0, 0, mul_full);
+            bool mul_lo_ok = (hw_mul[0] == td->golden_mul_lo[i]);
+            bool mul_hi_ok = (hw_mul[1] == td->golden_mul_hi[i]);
+            bool mul_ok = (mul_lo_ok && mul_hi_ok);
+            mpz_clear(a_lo); mpz_clear(b_lo); mpz_clear(mul_full);
 
             if (!(data_ok && consistent && mul_ok)) {
                 all_passed = false;
                 // One-shot diagnostic log (NOT per-iteration flooding — avoids
                 // the timing-perturbation hazard seen in adcx_arm.cpp:186).
                 log_warning("operand_space_arm: mismatch at pair %zu "
-                            "(add_ok=%d consistent=%d mul_ok=%d): "
+                            "(add_ok=%d slf_ok=%d mul_lo_ok=%d mul_hi_ok=%d): "
                             "a0=0x%016" PRIx64 " b0=0x%016" PRIx64 " "
                             "hw_add_hi=0x%016" PRIx64 " golden_add_hi=0x%016" PRIx64 " "
-                            "hw_mul_lo=0x%016" PRIx64 " golden_mul_lo=0x%016" PRIx64,
-                            i, data_ok, consistent, mul_ok,
+                            "hw_mul_lo=0x%016" PRIx64 " golden_mul_lo=0x%016" PRIx64 " "
+                            "hw_mul_hi=0x%016" PRIx64 " golden_mul_hi=0x%016" PRIx64,
+                            i, data_ok, consistent, mul_lo_ok, mul_hi_ok,
                             a_words[0], b_words[0],
                             hw_words[NUM_WORDS], golden[NUM_WORDS],
-                            hw_mul_lo, td->golden_mul_lo[i]);
+                            hw_mul[0], td->golden_mul_lo[i],
+                            hw_mul[1], td->golden_mul_hi[i]);
             }
         }
 
