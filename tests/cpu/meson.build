@@ -155,6 +155,28 @@ tests_set_base.add(
     )
 )
 
+# FMA test suite. Ported from the x86 AVX2/AVX-512 FMA tests to ARM NEON
+# vfma. The "avx2"/"avx512" suffixes are inherited x86 names; on aarch64 the
+# implementations use NEON float32x4_t/float64x2_t vfmaq. On non-aarch64
+# (e.g. x86-64) every _run is compiled out via #ifdef __aarch64__ and returns
+# EXIT_SKIP from init with "to be implemented (placeholder): ARM NEON FMA
+# required", so the suite is built on all arches but only executes on ARM64.
+tests_set_base.add(
+    files(
+        'fma/fma.cpp',
+        'fma/fma_patterns_avx512_pd.cpp',
+        'fma/fma_patterns_avx512_ps.cpp',
+        'fma/fma_tail_avx2.cpp',
+        'fma/fma_tail_avx512.cpp',
+        'fma/fmatail_avx2.cpp',
+        'fma/fmatail_avx512.cpp',
+        'fma/fmatail_double_nested_avx2.cpp',
+        'fma/fmatail_double_nested_avx512.cpp',
+        'fma/fmatail_nested_avx2.cpp',
+        'fma/fmatail_nested_avx512.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
 
 tests_base_a = static_library(
