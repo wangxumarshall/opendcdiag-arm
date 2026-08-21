@@ -698,6 +698,16 @@ if host_machine.cpu_family() == 'aarch64'
     endif
 endif
 
+# ARM64-native arithmetic tests that exercise third-party optimised libraries
+# (GMP / Arm Compute Library / compiler-rt). The subdir's own meson.build
+# defines gmp_dep/acl_dep/crt_builtins_lib via cc.find_library/declare_dependency
+# with required:false where possible, and the whole subdir is entered only on
+# aarch64 so x86-64 is untouched. Test IDs carry an `_arm` suffix and are
+# distinct from the tests/cpu/arithmetic (no-suffix) set ported earlier.
+if host_machine.cpu_family() == 'aarch64'
+    subdir('arithmetic_arm')
+endif
+
 # ARM64-native NEON + crypto (AES) tests. The subdir guards the actual build
 # behind `if host_machine.cpu_family() == 'aarch64'` so x86-64 is untouched.
 subdir('arm64')
