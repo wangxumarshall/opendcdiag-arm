@@ -80,12 +80,14 @@ END_DECLARE_TEST
  * exposed through a single per-CPU counter the way x86 exposes MSR 0x34.
  *
  * The test is therefore kept as a placeholder on non-x86 so it stays listed
- * and schedulable. When a portable per-CPU firmware/RAS-interrupt counter
- * becomes available (e.g. via perf_event_open on the ARM PMU, or a sysfs
- * attribute under /sys/devices/system/cpu/...), fill in the three functions
- * below following the x86 structure above: a baseline snapshot in preinit,
- * a per-thread delta reported via log_platform_message() in run, and a
- * re-snapshot in cleanup.
+ * and schedulable. It reports a clean skip ("to be implemented (placeholder)")
+ * so the result is marked ignored rather than spuriously passing. When a
+ * portable per-CPU firmware/RAS-interrupt counter becomes available (e.g.
+ * via perf_event_open on the ARM PMU, or a sysfs attribute under
+ * /sys/devices/system/cpu/...), fill in the three functions below following
+ * the x86 structure above: a baseline snapshot in preinit, a per-thread
+ * delta reported via log_platform_message() in run, and a re-snapshot in
+ * cleanup.
  */
 
 static int smi_count_preinit(struct test *test)
@@ -94,11 +96,21 @@ static int smi_count_preinit(struct test *test)
     return EXIT_SUCCESS;
 }
 
+static int smi_count_init(struct test *test)
+{
+    (void) test;
+    log_skip(TestResourceIssueSkipCategory,
+             "to be implemented (placeholder): SMI counting requires a "
+             "per-CPU firmware/RAS-interrupt counter not available on this "
+             "architecture");
+    return EXIT_SKIP;
+}
+
 static int smi_count_run(struct test *test, int thread)
 {
     (void) test;
     (void) thread;
-    return EXIT_SUCCESS;
+    __builtin_unreachable();    // init reports EXIT_SKIP, run never executes
 }
 
 static int smi_count_cleanup(struct test *test)
@@ -109,7 +121,7 @@ static int smi_count_cleanup(struct test *test)
 
 DECLARE_TEST(smi_count, "Counts SMI events")
     .test_preinit = smi_count_preinit,
-    .test_init = [](struct test *t) { return EXIT_SUCCESS; },
+    .test_init = smi_count_init,
     .test_run = smi_count_run,
     .test_cleanup = smi_count_cleanup,
     .desired_duration = -1,

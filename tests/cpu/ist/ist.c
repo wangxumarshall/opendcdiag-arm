@@ -55,8 +55,9 @@ static int ist_skip_preinit(struct test *test)
 static int ist_skip_init(struct test *test)
 {
     log_skip(TestResourceIssueSkipCategory,
-             "ARM64 In-Silicon Test (IST) backend not yet available on this "
-             "platform; test reserved as the counterpart of Intel IFS");
+             "to be implemented (placeholder): ARM64 In-Silicon Test (IST) "
+             "backend not yet available; test reserved as the counterpart "
+             "of Intel IFS");
     return EXIT_SKIP;
 }
 
