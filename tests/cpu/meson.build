@@ -44,6 +44,11 @@ tests_set_base.add(
     files(
         'ifs/sandstone_ifs.c',
         'ifs/ifs.c',
+        # Cache coherency / stress tests. cachebounce is portable (std::atomic);
+        # cache_stress_aggressor uses ARM NEON under #ifdef __aarch64__ guards and
+        # returns a clean EXIT_SKIP on non-aarch64 (x86-64 untouched).
+        'cache/cachebounce.cpp',
+        'cache/cache_stress_aggressor.cpp',
     )
 )
 
