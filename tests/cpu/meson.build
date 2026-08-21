@@ -141,6 +141,44 @@ tests_set_base.add(
     )
 )
 
+# Misc test suite (24 tests). Includes the core-179 SDC trigger probes
+# (movbe_dump_probe_a/b/c/d/e/f/g1/g2/h/x/xn, mrn_*) — the research testbed
+# for the real silent-data-corruption defect observed on Kunpeng 920 core 179.
+# The movbe_* probes use the portable __builtin_bswap32; the mrn_* files use
+# #if defined(__x86_64__) || defined(__i386__) ... #elif defined(__aarch64__)
+# dual-arch inline-asm (movq/str, ldr). movmskpspd and movq2dq use x86 SSE
+# intrinsics fully enclosed inside the x86-only #if branch, with an aarch64
+# NEON/inline-asm counterpart in #elif — so x86 is untouched and ARM64 has a
+# real implementation (no placeholder skip needed).
+tests_set_base.add(
+    files(
+        'misc/mite.cpp',
+        'misc/movdq2q.cpp',
+        'misc/movbe.cpp',
+        'misc/movbe_dump.cpp',
+        'misc/movbe_dump_probe_a.cpp',
+        'misc/movbe_dump_probe_b.cpp',
+        'misc/movbe_dump_probe_c.cpp',
+        'misc/movbe_dump_probe_d.cpp',
+        'misc/movbe_dump_probe_e.cpp',
+        'misc/movbe_dump_probe_f.cpp',
+        'misc/movbe_dump_probe_g1.cpp',
+        'misc/movbe_dump_probe_g2.cpp',
+        'misc/movbe_dump_probe_h.cpp',
+        'misc/movbe_dump_probe_x.cpp',
+        'misc/movbe_dump_probe_xn.cpp',
+        'misc/partial_store_forwarding.cpp',
+        'misc/movmskpspd.cpp',
+        'misc/movq2dq.cpp',
+        'misc/mrn_nuke.cpp',
+        'misc/mrn_pairs.cpp',
+        'misc/mrn_reloaded.cpp',
+        'misc/mrn_rmw.cpp',
+        'misc/mrn_rmw_dump.cpp',
+        'misc/mrn_flags.cpp',
+    )
+)
+
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
         when : crypto_dep,
@@ -314,6 +352,7 @@ tests_set_base.add(
     )
 )
 
+
 # JIT code-generation test suite. Each test mmaps executable memory and
 # emits a chain of machine-code instructions (at runtime, not compile-time)
 # to stress microarchitectural features: move elimination / register rename,
@@ -337,6 +376,21 @@ tests_set_base.add(
         'jit/zero_control_vec_sse_jit.cpp',
         'jit/zero_control_vec_evex_jit.cpp',
         'jit/zero_control_vec_vex_jit.cpp',
+    )
+)
+
+# Arithmetic tests (multi-precision carry chains). Ported from the x86
+# ADCX/ADOX tests to ARM64. adcx/adcxlong use an ARM64 "adcs" inline-asm
+# carry chain (the ARM equivalent of the x86 adcx instruction); adox and
+# adcx_adox_interleaved are software-simulated via unsigned __int128 and have
+# no arch-specific code. All four build on aarch64; the inline-asm paths in
+# adcx/adcxlong are ARM64-native and are the point of those tests.
+tests_set_base.add(
+    files(
+        'arithmetic/adcx.cpp',
+        'arithmetic/adcx_adox_interleaved.cpp',
+        'arithmetic/adcxlong.cpp',
+        'arithmetic/adox.cpp',
     )
 )
 
