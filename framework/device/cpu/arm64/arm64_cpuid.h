@@ -47,7 +47,15 @@ static inline bool arm64_has_feature_mask(device_features_t all_features, device
 #include <string.h>
 #include <sys/auxv.h>
 
-#define KUNPENG920_MIDR    0x480D0100
+// MIDR_EL1 layout: [31:24] implementer, [23:20] variant, [19:16] architecture,
+// [15:4] part number, [3:0] revision. Kunpeng 920 = HiSilicon implementer
+// 0x48, part 0xd01 (TaiShan v110). Match on implementer + part only
+// (ignore variant/architecture/revision) so any stepping is recognised.
+// part 0xd01 sits in bits[15:4], i.e. 0xd01<<4 = 0xd010.
+//   mask   = 0xFF00FFF0  (implementer bits [31:24] + part bits [15:4])
+//   expect = 0x4800D010  (implementer 0x48<<24 | part 0xd01<<4)
+#define KUNPENG920_MIDR_MASK   0xFF00FFF0ULL
+#define KUNPENG920_MIDR        0x4800D010ULL
 
 #ifndef AT_HWCAP2
 #define AT_HWCAP2 26
@@ -88,7 +96,7 @@ static inline bool is_kunpeng920(void)
 
     for (int i = 0; i < cpu_count; ++i) {
         uint64_t midr = read_midr_from_sysfs(i);
-        if ((midr & 0xFFFF0000) == KUNPENG920_MIDR)
+        if ((midr & KUNPENG920_MIDR_MASK) == KUNPENG920_MIDR)
             return true;
     }
     return false;
