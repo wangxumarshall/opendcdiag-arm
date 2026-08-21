@@ -73,16 +73,20 @@ glibc-static                # 全静态链接(-static)时需要 libc.a（默认�
 # 1. 创建离线包目录
 mkdir -p ~/opendcdiag-offline && cd ~/opendcdiag-offline
 
-# 2. 下载必装包及其依赖（含依赖树，--resolve）
-sudo dnf install --downloadonly --resolve --destdir=$PWD \
+# 2. 下载必装包及其完整依赖树
+#    用 `dnf download` 子命令（不是 `dnf install --downloadonly`）：
+#    --resolve 解析依赖, --alldeps 连同本机已满足的依赖也一并下载（对最小化
+#    目标机是必需的, 否则依赖不全）。
+dnf download --resolve --alldeps --destdir=$PWD \
     gcc gcc-c++ meson ninja-build perl python3 pkgconf binutils \
     boost-devel zlib-devel zstd-devel libisa-l-devel libatomic git
 
 # 3.（可选）下载 OpenSSL/gtest
-sudo dnf install --downloadonly --resolve --destdir=$PWD \
-    openssl-devel gtest-devel
+dnf download --resolve --alldeps --destdir=$PWD openssl-devel gtest-devel
 ```
 
+> `dnf download` 子命令由 `dnf-plugins-core` 提供。openEuler 24.03 SP3 最小安装默认不含它，需先在有网机上 `dnf install -y dnf-plugins-core`。
+>
 > `libisa-l-devel` 在 **EPOL** 仓。若最小安装的机器未启用 EPOL，需先 `sudo dnf config-manager --set-enabled EPOL`（或在有网机上下载时确保 EPOL 已启用，RPM 拷过去即可直接 `rpm -ivh`，不依赖仓库元数据）。
 >
 > 若 EPOL 不可用，改用 `libisal-devel`（everything 仓，2.29.0），头文件路径一致。
@@ -92,7 +96,7 @@ sudo dnf install --downloadonly --resolve --destdir=$PWD \
 ```bash
 # 拷贝整个目录到目标机后：
 cd ~/opendcdiag-offline
-sudo dnf install --disablerepo=* ./*.rpm          # 推荐（自动处理依赖顺序）
+sudo dnf install -y --disablerepo=* ./*.rpm       # 推荐（自动处理依赖顺序）
 # 或纯 rpm 方式（需手动保证顺序）：
 # sudo rpm -Uvh --nodeps ./*.rpm
 ```
