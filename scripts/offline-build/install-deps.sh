@@ -1,5 +1,5 @@
 #!/bin/bash
-# install-deps.sh — 在无网络的 openEuler 24.03 SP3 目标机上, 离线安装由
+# install-deps.sh — 在无网络的 openEuler 24.03 SPx 目标机上, 离线安装由
 # download-deps.sh 下载的全部 RPM。
 #
 # 用法:
@@ -7,58 +7,67 @@
 #
 # 默认从 download-deps.sh 的输出目录 ./opendcdiag-rpms 安装; 也可显式指定
 # RPM 所在目录作为第一个参数。
+#
+# **版本管控**: 读取 RPM 目录里的 .os-version 标记 (download-deps.sh 写入),
+# 与目标机 openEuler 版本严格比对; 不一致则拒绝安装并指引到同版本机重下。
+# **依赖排序**: 用 rpm -qp --provides/--requires 提取每个候选 RPM 的依赖,
+# 建依赖图, tsort 拓扑排序后, 按序分批传给 dnf 安装 (避免乱序导致的
+# "依赖未就绪" 问题; 实际 dnf 也会内部排序, 本脚本额外显式排序以确定性)。
 set -euo pipefail
 
-# 默认指向 download-deps.sh 的输出目录 (它在有网机上默认输出到
-# $(pwd)/opendcdiag-rpms)。用户可传入第一个参数覆盖。
+# 加载共享的版本检测逻辑
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$SCRIPT_DIR/_common.sh"
+
+require_openeuler
+require_min_os
+
+# 默认指向 download-deps.sh 的输出目录
 RPMDIR="${1:-$(pwd)/opendcdiag-rpms}"
 
 if [ ! -d "$RPMDIR" ]; then
     echo "错误: RPM 目录不存在: $RPMDIR" >&2
     echo "       用法: $0 [RPM目录]  (默认 ./opendcdiag-rpms)" >&2
-    echo "       若尚未下载, 先在有网机上运行 download-deps.sh。" >&2
+    echo "       若尚未下载, 先在与本机同版本的 openEuler 有网机上运行 download-deps.sh。" >&2
     exit 1
 fi
 
 cd "$RPMDIR"
 
+# ---- 版本管控: 严格比对下载标记与目标机版本 ----
+OS_TAG="$RPMDIR/.os-version"
+if [ -f "$OS_TAG" ]; then
+    DOWNLOAD_OS=$(cat "$OS_TAG" | tr -d '[:space:]')
+    TARGET_OS=$(detect_os_version_full)
+    if [ "$DOWNLOAD_OS" != "$TARGET_OS" ]; then
+        echo "错误: 版本不匹配 — 下载机 '$DOWNLOAD_OS' vs 目标机 '$TARGET_OS'" >&2
+        echo "       SP3 下载的 RPM 装到 SP4 (或反之) 会触发降级冲突 + glibc-devel" >&2
+        echo "       精确版本依赖死结, 无法干净安装。" >&2
+        echo "       正解: 在与目标机同版本 ($TARGET_OS) 的 openEuler 有网机上" >&2
+        echo "       重跑 download-deps.sh 重新下载 RPM 树, 再拷过来安装。" >&2
+        exit 1
+    fi
+    echo "==> 版本核对通过: $TARGET_OS (下载机与目标机一致)"
+else
+    echo "警告: $RPMDIR/.os-version 标记缺失 (RPM 树可能是旧版脚本下载的)。" >&2
+    echo "       跳过版本核对。若遇降级冲突, 请用新版 download-deps.sh 重下。" >&2
+fi
+
 if ! ls ./*.rpm >/dev/null 2>&1; then
     echo "错误: $RPMDIR 下未找到 .rpm 文件" >&2
-    echo "       先在有网机上运行 download-deps.sh 下载依赖。" >&2
     exit 1
 fi
 
-echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 自动处理依赖顺序)..."
+echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 拓扑排序后分批安装)..."
 
+# ---- A 类: 静态排除受保护/无关系统包 ----
 # download-deps.sh 用 `dnf download --resolve --alldeps` 拉全整棵依赖树,
-# 其中会混入两类不该原样喂给 dnf 的包:
-#
-# A. 受保护/无关系统包 (bootloader/固件/系统核心): grub2-*, shim, mokutil,
-#    efivar, efibootmgr, dracut, os-prober, kpartx, device-mapper, fuse,
-#    glibc, systemd, pam, setup, filesystem, basesystem, shadow, crypto-
-#    policies, openEuler-release 等。它们在 openEuler 上受 dnf
-#    protected_packages 保护, 一次性 `dnf install ./*.rpm` 时版本若有差异,
-#    dnf 会视"升级"为"删除受保护包"而拒绝:
-#      Problem: this operation would remove the following protected packages:
-#      grub2-efi-aa64
-#    OpenDCDiag 的构建完全不依赖这些包, 直接排除。
-#
-# B. 与目标机已装版本冲突的"降级"包: 当下载机的 openEuler 版本(如 SP3)与
-#    目标机(如 SP4)不一致时, 下载树里的 audit-libs / openssl-libs / rpm /
-#    cyrus-sasl-lib / openssl-pkcs11 等 RPM 会比目标机已装的旧, dnf 拒绝降级
-#    且目标机的 bind-libs/rng-tools/python3-rpm 等依赖 SP4 版本 → 冲突。
-#    对这类包, 保留目标机已装的更新版本, 不传下载的旧 RPM 给 dnf。
-#    (正解是下载机与目标机同版本; 此过滤是版本错配时的兜底。)
-#
-# 注意: 不能用 `dnf install --exclude=X ./*.rpm` —— dnf 的 --exclude 对命令行
-# 显式指定的本地 .rpm 文件参数无效, 它会把匹配的 .rpm 从候选移除后仍为这些
-# "参数"去仓库找匹配, 在 --disablerepo=* 下报 "No match for argument"。
-# 正确做法是在 shell 层面过滤: 先按前缀排除 A 类, 再对每个剩余 RPM 查目标机
-# 已装版本, 若已装且版本 >= 下载 RPM 的版本则跳过(避免降级, 见 B 类)。
-
-# A 类: 静态排除模式(按文件名前缀)。不含 glibc-devel/glibc-headers —— 它们
-# 是 gcc 的依赖, 目标机最小安装可能没装, 需要装; 若目标机已装则由下面的
-# "已装则跳过"逻辑自动处理。
+# 其中混入 bootloader/固件/系统核心等受 dnf protected_packages 保护的包
+# (grub2-*, shim, mokutil, efivar, efibootmgr, dracut, os-prober, kpartx,
+# device-mapper, fuse, glibc 本身, systemd, pam, setup, filesystem, ...)
+# 它们版本若有差异 dnf 会视升级为删除受保护包而拒绝。OpenDCDiag 不依赖它们。
+# glibc-devel / glibc-headers 不排除 (gcc 需要); 版本匹配时它们与目标机 glibc 配对。
 EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|'
 EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|'
 EXCLUDE_RE+='glibc$|glibc-common$|glibc-headers$|glibc-static$|'
@@ -66,27 +75,20 @@ EXCLUDE_RE+='systemd$|systemd-libs$|systemd-udev$|'
 EXCLUDE_RE+='setup$|filesystem$|basesystem$|shadow$|pam$|'
 EXCLUDE_RE+='crypto-policies$|openEuler-release$|openEuler-gpg-keys$|openEuler-repos$)'
 
-# B 类: 对每个候选 RPM, 若目标机已装同名包且已装版本不旧于下载 RPM 版本,
-# 则跳过(保留目标机版本, 避免降级冲突)。版本比较用 rpmdev-vercmp 或回退到
-# 字符串比较; 为零依赖, 这里用 `rpmdev-vercmp` 不存在时退化为 `vercmp` 不可
-# 用则直接保留(让 dnf 报错)。更稳妥: 直接查 `rpm -q 包名`, 已装即跳过该 RPM
-# (因为目标机已有该包, 离线场景下没必要重装, 重装只会带来版本冲突)。
+# ---- B 类: 跳过目标机已装同版本包 (减少安装量, 避免无谓重装) ----
+# 版本严格匹配前提下, 已装即同版本, 跳过无损。
 skip_if_installed() {
-    # 入参: RPM 文件路径。输出包名(nevra name)。返回 0=跳过(已装), 1=保留。
     local rpmfile="$1"
     local name
     name=$(rpm -qp --qf '%{NAME}' --noscript --nodigest --nosignature "$rpmfile" 2>/dev/null)
-    [ -z "$name" ] && return 1   # 查不到包名, 保守保留
-    # 目标机是否已装该包? (rpm -q 对未装返回非 0)
+    [ -z "$name" ] && return 1
     if rpm -q "$name" >/dev/null 2>&1; then
-        return 0   # 已装, 跳过该 RPM (保留目标机版本, 不降级)
+        return 0   # 已装, 跳过
     fi
     return 1
 }
 
-# 构建待安装列表:
-# 1) 按前缀排除 A 类受保护/无关系统包 (用 %f 纯文件名匹配, 因正则 ^锚定文件名)
-# 2) 对剩余每个 RPM, 若目标机已装同名包则跳过 (B 类降级冲突兜底)
+# 收集候选: 排除 A 类 + 跳过 B 类已装
 KEEP=()
 SKIP_INSTALLED=0
 mapfile -t CANDIDATES < <(find "$RPMDIR" -maxdepth 1 -name '*.rpm' -printf '%f\n' \
@@ -100,33 +102,109 @@ for n in "${CANDIDATES[@]}"; do
 done
 
 if [ ${#KEEP[@]} -eq 0 ]; then
-    echo "错误: 过滤后无 RPM 可装 (检查 $RPMDIR 内容与排除模式)" >&2
-    exit 1
+    echo "所有包已安装或被排除, 无需安装。" >&2
+    exit 0
 fi
 
 TOTAL=$(ls -1 ./*.rpm 2>/dev/null | wc -l)
 EXCLUDED_A=$(find . -maxdepth 1 -name '*.rpm' -printf '%f\n' | grep -icE "$EXCLUDE_RE")
 echo "    RPM 总数: $TOTAL"
 echo "    排除A(受保护/无关系统包): $EXCLUDED_A"
-echo "    跳过B(目标机已装, 避免降级冲突): $SKIP_INSTALLED"
-echo "    待装: ${#KEEP[@]} 个"
+echo "    跳过B(目标机已装): $SKIP_INSTALLED"
+echo "    待拓扑排序并安装: ${#KEEP[@]} 个"
 
-if ! sudo dnf install --disablerepo=* -y "${KEEP[@]}"; then
+# ---- 拓扑排序: 用 rpm provides/requires 建依赖图, tsort 排序 ----
+# 思路: 对每个候选 RPM, 提取它提供的符号 (provides: 包名/soname) 和需要的
+# 符号 (requires)。若 RPM B 的某 require 符号由 RPM A 提供, 则 A 须先于 B
+# 安装 → 建边 A->B。tsort 产出安装顺序。
+# requires 里过滤掉: rpmlib(...)、文件路径(/bin/sh 等)、已满足于目标机的符号。
+#   对已满足符号 (目标机已装包提供) 不建边, 否则会把已装系统包当依赖卡住。
+
+# 1) 收集所有候选 RPM 的 provides: symbol -> rpmfile
+declare -A PROVIDE_MAP
+# 2) 收集目标机已装包提供的符号 (避免把系统已满足的依赖当卡点)
+SYS_PROVIDES=$(rpm -qa --provides 2>/dev/null | awk '{print $1}' | sort -u)
+
+# 建 PROVIDE_MAP: symbol -> 第一个提供它的 RPM 文件路径
+while IFS= read -r line; do
+    # line 格式: sym<TAB>rpmfile
+    sym=${line%%$'\t'*}
+    rfile=${line#*$'\t'}
+    [ -z "$sym" ] && continue
+    [ -n "${PROVIDE_MAP[$sym]+x}" ] && continue
+    PROVIDE_MAP[$sym]=$rfile
+done < <(
+    for f in "${KEEP[@]}"; do
+        rpm -qp --provides --noscript --nodigest --nosignature "$f" 2>/dev/null \
+            | awk '{print $1}' | sort -u | while read -r sym; do
+            [ -z "$sym" ] && continue
+            printf '%s\t%s\n' "$sym" "$f"
+        done
+    done
+)
+
+# 建依赖边: 对每个 RPM 的每个 require 符号, 若某候选 RPM 提供它且不是自身,
+# 且该符号未被目标机已装包提供 (否则是系统已满足, 不该卡), 则建边 provider->requirer
+EDGES_FILE=$(mktemp)
+trap 'rm -f "$EDGES_FILE"' EXIT
+for f in "${KEEP[@]}"; do
+    name=$(rpm -qp --qf '%{NAME}' --noscript --nodigest --nosignature "$f" 2>/dev/null)
+    [ -z "$name" ] && continue
+    rpm -qp --requires --noscript --nodigest --nosignature "$f" 2>/dev/null \
+        | awk '{print $1}' | sort -u | while read -r req; do
+        # 过滤: rpmlib(...)、文件路径依赖 (以 / 开头)、空
+        [ -z "$req" ] && continue
+        [[ "$req" == rpmlib* ]] && continue
+        [[ "$req" == /* ]] && continue
+        # 跳过目标机已装包提供的符号 (系统已满足, 不建边)
+        if echo "$SYS_PROVIDES" | grep -qxF "$req"; then
+            continue
+        fi
+        # 查候选 RPM 中谁提供该符号
+        provider="${PROVIDE_MAP[$req]:-}"
+        [ -z "$provider" ] && continue
+        [ "$provider" = "$f" ] && continue   # 自身提供, 不建边
+        # 边: provider 先于 f 安装
+        printf '%s %s\n' "$provider" "$f"
+    done
+done > "$EDGES_FILE"
+
+# tsort 排序 (忽略环, tsort 会警告但仍输出)
+SORTED_FILE=$(mktemp)
+trap 'rm -f "$EDGES_FILE" "$SORTED_FILE"' EXIT
+if ! tsort "$EDGES_FILE" > "$SORTED_FILE" 2>/dev/null; then
+    # tsort 报环警告但通常仍输出部分顺序; 失败则回退到原 KEEP 顺序
+    echo "警告: 依赖图含环, tsort 退化为原顺序 (dnf 仍会内部排序)" >&2
+    printf '%s\n' "${KEEP[@]}" > "$SORTED_FILE"
+fi
+
+# 按拓扑顺序构造安装列表 (tsort 输出中有的, 加上未入图的孤立 RPM)
+mapfile -t SORTED < "$SORTED_FILE"
+# 加上不在 tsort 输出里的 KEEP 成员 (孤立节点, 无依赖关系)
+declare -A IN_SORTED
+for s in "${SORTED[@]}"; do IN_SORTED[$s]=1; done
+INSTALL_LIST=("${SORTED[@]}")
+for f in "${KEEP[@]}"; do
+    [ -z "${IN_SORTED[$f]:-}" ] && INSTALL_LIST+=("$f")
+done
+
+echo "    拓扑排序完成, 安装顺序示例(前10):"
+for f in $(printf '%s\n' "${INSTALL_LIST[@]:0:10}"); do
+    echo "      $(rpm -qp --qf '%{NAME}' --noscript --nodigest --nosignature "$f" 2>/dev/null)"
+done
+
+# ---- 安装: 按拓扑顺序, 整批传给 dnf (dnf 在已排序基础上解析, 且能聚合冲突) ----
+if ! sudo dnf install --disablerepo=* -y "${INSTALL_LIST[@]}"; then
     echo "" >&2
-    echo "==> dnf 离线安装失败。常见原因与逐级兜底方案:" >&2
-    echo "    1) **下载机与目标机 openEuler 版本不一致** (如 SP3 下载、SP4 目标):" >&2
-    echo "       这是降级冲突的根因。正解是在与目标机**同版本**的机器上重跑" >&2
-    echo "       download-deps.sh 重新下载 RPM 树。版本错配时, 本脚本已自动跳过" >&2
-    echo "       目标机已装的包, 但 glibc-devel 等精确版本依赖仍可能无解:" >&2
-    echo "         SP3 glibc-devel 要求 glibc = 2.38-84.sp3 (精确), 无法装到 SP4" >&2
-    echo "       此时需在 SP4 目标机上补装对应 glibc-devel(若有本地 SP4 源)," >&2
-    echo "       或用方案 3 的 rpm --nodeps 强装工具链跳过该约束。" >&2
-    echo "    2) 仍有受保护包冲突(本脚本未覆盖到): 查 dnf 报错里的包名," >&2
-    echo "       把它的前缀加进脚本的 EXCLUDE_RE 后重跑。" >&2
-    echo "    3) 允许替换受保护包(注意: 会改动系统关键包, 离线环境有风险):" >&2
-    echo "         sudo dnf install --disablerepo=* -y --allowerasing \"\${KEEP[@]}\"" >&2
-    echo "    4) 依赖树不完整(版本差异大): 纯 rpm 强装跳过依赖, 仅装构建工具链:" >&2
-    echo "         sudo rpm -Uvh --nodeps --force \"\${KEEP[@]}\"" >&2
+    echo "==> dnf 离线安装失败。逐级兜底方案:" >&2
+    echo "    1) 若报版本降级冲突 (cannot install both X sp3 and sp4):" >&2
+    echo "       说明 .os-version 标记可能缺失或被绕过。确认下载机与本机同 SP 版本。" >&2
+    echo "    2) 若报精确版本依赖缺失 (nothing provides glibc = X.sp3):" >&2
+    echo "       glibc-devel 等精确版本依赖无法跨 SP 满足, 必须用同版本 RPM 树。" >&2
+    echo "    3) 允许替换受保护包(改动系统关键包, 离线环境有风险):" >&2
+    echo "         sudo dnf install --disablerepo=* -y --allowerasing \"\${INSTALL_LIST[@]}\"" >&2
+    echo "    4) 按拓扑顺序逐个 rpm 强装跳过依赖 (最后兜底):" >&2
+    echo "         for f in \"\${INSTALL_LIST[@]}\"; do sudo rpm -Uvh --nodeps --force \"\$f\"; done" >&2
     echo "       (会留下依赖不一致, 但能立即装上工具链以继续 build.sh)" >&2
     exit 1
 fi

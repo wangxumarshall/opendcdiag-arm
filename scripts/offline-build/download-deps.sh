@@ -1,19 +1,39 @@
 #!/bin/bash
-# download-deps.sh — 在一台有网的 openEuler 24.03 SP3 aarch64 上下载 OpenDCDiag
+# download-deps.sh — 在一台有网的 openEuler 24.03 SPx aarch64 上下载 OpenDCDiag
 # 构建所需的全部 RPM（含依赖树），用于拷到无网环境离线安装。
 #
 # 用法:
 #   ./download-deps.sh [输出目录]
 #
 # 默认输出目录: ./opendcdiag-rpms
-# 需要 dnf-plugins-core (提供 `dnf download` 子命令). openEuler 24.03 SP3
-# 最小安装默认不含它, 先在有网机上: dnf install -y dnf-plugins-core
+# 需要 dnf-plugins-core (提供 `dnf download` 子命令). openEuler 最小安装
+# 默认不含它, 先在有网机上: dnf install -y dnf-plugins-core
+#
+# **版本管控**: 脚本检测本机 openEuler 版本 (SPx), 并在输出目录写一个
+# .os-version 标记文件 (内容如 openEuler-24.03LTS_SP3)。拷到目标机后,
+# install-deps.sh 会读这个标记并与目标机版本严格比对——不一致则拒绝安装。
+# 因此**必须在与目标机同版本的 openEuler 上运行本脚本下载**, 否则目标机
+# 安装时会因版本错配 (SP3 RPM 装到 SP4 等) 报降级冲突而失败。
 set -euo pipefail
+
+# 加载共享的版本检测逻辑
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$SCRIPT_DIR/_common.sh"
+
+require_openeuler
+require_min_os
 
 OUTDIR="${1:-$(pwd)/opendcdiag-rpms}"
 mkdir -p "$OUTDIR"
 
+# 写入版本标记文件, 供 install-deps.sh 在目标机核对
+OS_VERSION_TAG="$OUTDIR/.os-version"
+detect_os_version_full > "$OS_VERSION_TAG"
+
 echo "==> 输出目录: $OUTDIR"
+echo "==> 下载机 openEuler 版本: $(detect_os_version_full)  (已写入 .os-version 标记)"
+echo "    (目标机必须与此版本一致, 否则 install-deps.sh 将拒绝安装)"
 
 # 必装包（默认 CPU 构建, aarch64）
 REQUIRED=(

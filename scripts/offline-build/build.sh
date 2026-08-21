@@ -1,10 +1,22 @@
 #!/bin/bash
-# build.sh — 在依赖已就绪的 openEuler 24.03 SP3 aarch64 上构建 OpenDCDiag
+# build.sh — 在依赖已就绪的 openEuler 24.03 SPx aarch64 上构建 OpenDCDiag
 # 并做最小功能验证。
 #
 # 用法:
 #   ./build.sh [源码根目录] [构建目录]
+#
+# **版本管控**: 检测并打印本机 openEuler 版本 (SPx), 与 download-deps.sh /
+# install-deps.sh 的版本基线一致, 确保构建环境也被版本管控覆盖。
 set -euo pipefail
+
+# 加载共享的版本检测逻辑
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$SCRIPT_DIR/_common.sh"
+
+require_openeuler
+require_min_os
+echo "==> 构建 openEuler 版本: $(detect_os_version_full)"
 
 SRC="${1:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 BUILD="${2:-$SRC/builddir}"
