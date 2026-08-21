@@ -50,6 +50,11 @@ OPTIONAL=(
 # 注意: `dnf install --downloadonly` 只会下载本机"尚未安装"的那部分依赖, 对
 # 一台最小化目标机而言依赖是不完整的, 故不采用。`dnf download --resolve
 # --alldeps` 则无论本机已装与否都把整棵依赖树拉全。
+#
+# 下载阶段不加 --exclude: 多下无害(目标机安装阶段会过滤掉受保护/无关系统
+# 包), 但少下可能导致依赖树不全。install-deps.sh 在安装时会用 shell 过滤
+# 掉 bootloader/固件/系统核心受保护包(grub2-*, glibc, systemd, pam 等),
+# 避免触发 "this operation would remove protected packages" 冲突。
 download_pkgs() {
     local label="$1"; shift
     local pkgs=("$@")

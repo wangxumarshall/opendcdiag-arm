@@ -96,7 +96,12 @@ dnf download --resolve --alldeps --destdir=$PWD openssl-devel gtest-devel
 ```bash
 # 拷贝整个目录到目标机后：
 cd ~/opendcdiag-offline
-sudo dnf install -y --disablerepo=* ./*.rpm       # 推荐（自动处理依赖顺序）
+# 直接用 install-deps.sh（它会在 shell 层面过滤掉受保护/无关系统包）：
+./scripts/offline-build/install-deps.sh .
+# 或手动等价命令（先过滤出构建必需的 RPM，再传给 dnf）：
+EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|kpartx|device-mapper|fuse|glibc|glibc-common|glibc-devel|glibc-headers|systemd|systemd-libs|systemd-udev|setup|filesystem|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg-keys|openEuler-repos)'
+sudo dnf install -y --disablerepo=* \
+    $(find . -maxdepth 1 -name '*.rpm' -printf '%p\n' | grep -ivE "$EXCLUDE_RE" | sort)
 # 或纯 rpm 方式（需手动保证顺序）：
 # sudo rpm -Uvh --nodeps ./*.rpm
 ```
@@ -155,6 +160,14 @@ ninja -C builddir
 4. **EPOL 仓未启用**：`libisa-l-devel` 只在 EPOL。离线场景把 RPM 拷过去 `rpm -ivh` 即可绕过仓库检查；或改用 everything 仓的 `libisal-devel`。
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。
 6. **磁盘空间**：完整构建（含 SVE/NEON 多后端）产物约 256 MB 单二进制 + 中间 `.a`，建议 builddir 所在盘预留 ≥ 2 GB。
+7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）、initramfs 链（`dracut`、`os-prober`、`kpartx`、`device-mapper`、`fuse`）及系统核心（`glibc`、`systemd`、`pam`、`setup`、`filesystem`、`basesystem`、`shadow`、`openEuler-release` 等）。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。OpenDCDiag 构建完全不依赖这些包。
+   **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf：
+   ```bash
+   EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|kpartx|device-mapper|fuse|glibc|glibc-common|glibc-devel|glibc-headers|systemd|systemd-libs|systemd-udev|setup|filesystem|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg-keys|openEuler-repos)'
+   sudo dnf install -y --disablerepo=* \
+       $(find . -maxdepth 1 -name '*.rpm' -printf '%p\n' | grep -ivE "$EXCLUDE_RE" | sort)
+   ```
+   `install-deps.sh` 已内置这套 shell 过滤。若仍有个别受保护包冲突，把它的前缀加进 `EXCLUDE_RE`；或用 `--allowerasing` 允许替换（注意：会改动系统关键包，离线环境有风险）；或退回 `rpm -Uvh --nodeps --force` 仅强装工具链。
 
 ---
 
