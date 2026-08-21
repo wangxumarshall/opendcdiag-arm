@@ -21,14 +21,20 @@
  *     the kernel walks the software page tables, and the hardware Page-Table
  *     Walker repopulates the TLB. Repeating this every iteration "tortures" the
  *     PTW state machine, exactly the targeted weak spot.
- *   - Cross-page-boundary accesses: a single load/store straddling two pages
- *     forces two TLB lookups in one instruction and stresses the
- *     page-boundary / split-access handling in the MMU.
+ *   - Cross-page-boundary accesses: a single 8-byte unaligned load/store placed
+ *     at page_end-4 straddles the boundary (4 bytes in each page), forcing two
+ *     TLB lookups from one instruction and stressing the page-boundary /
+ *     split-access handling in the MMU. (The previous version wrote two separate
+ *     same-page 4-byte values — no single access crossed the boundary, so the
+ *     "two TLB lookups in one instruction" target was never actually hit.)
  *   - Unaligned accesses at varying offsets stress the misalignment-handling
  *     path of the load/store unit (which interacts with the MMU for
  *     sub-page addressing).
- *   - Stride access sweeps different TLB entries / cache sets to widen
- *     coverage rather than hammering one line.
+ *   - Stride access sweeps one cache line per page across the whole 4096-page
+ *     region (16 MB, ~64x a typical DTLB), so every pass evicts resident TLB
+ *     entries and replays the page-table walker — real TLB thrashing, the
+ *     actual "torture the TLB" goal. (The old 64-page working set fit in any
+ *     DTLB and never thrashed.)
  *
  * SDC detection: for each page we write a known 64-bit golden pattern, issue
  * MADV_DONTNEED (which must read back as zero after the fault — proving the
@@ -52,8 +58,15 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-// Number of pages in the test region. Must be >= 2 for cross-page access.
-static constexpr size_t NUM_PAGES = 64;
+// Number of pages in the test region. Sized to EXCEED the DTLB capacity so the
+// stride sweep forces TLB misses/evictions at scale — the actual "torture the
+// TLB" the test's goal requires. A 64-page (256 KB) working set fits in any
+// aarch64 DTLB (typically 48-64 entries for 4K pages), so the old value never
+// thrashed. 4096 pages (16 MB) is ~64x a typical DTLB, so every stride pass
+// evicts resident entries and replays the page-table walker. Per-thread private
+// region; 16 MB * 192 threads = 3 GB, well within this 791 GB host's headroom.
+// Must be >= 2 for cross-page access.
+static constexpr size_t NUM_PAGES = 4096;
 
 // A 64-bit golden pattern with maximum Hamming distance between successive
 // writes, to also toggle the data-path gates (operand-space bonus). We cycle
@@ -174,25 +187,22 @@ static int mmu_stress_arm_run(struct test *test, int cpu)
                 continue;
             }
 
-            // ---- (2) Cross-page-boundary access. Place a 64-bit value at the
-            // last 4 bytes of this page + first 4 bytes of the next page (the
-            // store straddles the page boundary, forcing two TLB lookups).
+            // ---- (2) Real cross-page-boundary access. Place a single 8-byte
+            // value whose address is page_end-4, so 4 bytes land in page p and
+            // 4 bytes in page p+1. A single ldr/str of those 8 bytes straddles
+            // the boundary -> one instruction, two TLB lookups, stressing the
+            // page-boundary / split-access handling. (The previous version did
+            // two separate same-page 4-byte accesses — no single access crossed
+            // the boundary, so the dual-TLB-lookup target was never hit.)
             if (p + 1 < NUM_PAGES) {
-                uint8_t *boundary = page + page_size - 4;
-                uint32_t half = (uint32_t)golden;
-                std::memcpy(boundary, &half, sizeof(half));      // last 4 of page p
-                uint32_t half2 = (uint32_t)golden_alt;
-                uint8_t *next_page = region + (p + 1) * page_size;
-                std::memcpy(next_page, &half2, sizeof(half2));   // first 4 of page p+1
-
-                // Read back both halves; must match what we wrote.
-                uint32_t r0, r1;
-                std::memcpy(&r0, boundary, sizeof(r0));
-                std::memcpy(&r1, next_page, sizeof(r1));
-                if (r0 != half || r1 != half2) {
-                    log_warning("mmu_stress_arm: cross-page access at page %zu/%zu "
-                                "mismatch (got 0x%08x/0x%08x, want 0x%08x/0x%08x)",
-                                p, p + 1, r0, r1, half, half2);
+                uint8_t *boundary = page + page_size - 4;  // 4 bytes in p, 4 in p+1
+                uint64_t crossv = golden ^ golden_alt;     // high-Hamming mix
+                mmu_store64(boundary, crossv);
+                uint64_t crd = mmu_load64(boundary);
+                if (crd != crossv) {
+                    log_warning("mmu_stress_arm: cross-boundary 8-byte access at "
+                                "page %zu/%zu mismatch 0x%016" PRIx64 " want 0x%016" PRIx64,
+                                p, p + 1, crd, crossv);
                     all_passed = false;
                 }
             }
@@ -211,23 +221,28 @@ static int mmu_stress_arm_run(struct test *test, int cpu)
                     all_passed = false;
                 }
             }
+        }
 
-            // ---- (4) Stride access: touch several cache lines within the
-            // page with a stride to widen TLB / cache-set coverage.
-            for (size_t s = 0; s < page_size; s += 64) {
-                uint64_t sv = golden ^ (s / 64);
-                mmu_store64(page + s, sv);
-            }
-            for (size_t s = 0; s < page_size; s += 64) {
-                uint64_t sv = golden ^ (s / 64);
-                uint64_t srd = mmu_load64(page + s);
-                if (srd != sv) {
-                    log_warning("mmu_stress_arm: stride access page %zu off %zu "
-                                "mismatch 0x%016" PRIx64 " want 0x%016" PRIx64,
-                                p, s, srd, sv);
-                    all_passed = false;
-                    break;
-                }
+        // ---- (4) DTLB-thrash sweep. Touch one cache line per page across the
+        // WHOLE 4096-page region (16 MB, ~64x a typical DTLB). Because the
+        // working set far exceeds DTLB capacity, every access evicts a
+        // resident entry and replays the page-table walker — real TLB
+        // thrashing, the "torture the TLB" goal. Write a per-page golden,
+        // then reload-and-verify in a second pass (so the verify pass is
+        // itself TLB-thrashing, not cache-warm).
+        for (size_t p = 0; p < NUM_PAGES; ++p) {
+            uint64_t sv = GOLDEN_TABLE[p % GOLDEN_TABLE_SIZE] ^ (p * 0x9E3779B97F4A7C15ULL);
+            mmu_store64(region + p * page_size, sv);
+        }
+        for (size_t p = 0; p < NUM_PAGES; ++p) {
+            uint64_t sv = GOLDEN_TABLE[p % GOLDEN_TABLE_SIZE] ^ (p * 0x9E3779B97F4A7C15ULL);
+            uint64_t srd = mmu_load64(region + p * page_size);
+            if (srd != sv) {
+                log_warning("mmu_stress_arm: DTLB-thrash page %zu "
+                            "mismatch 0x%016" PRIx64 " want 0x%016" PRIx64,
+                            p, srd, sv);
+                all_passed = false;
+                break;
             }
         }
 
