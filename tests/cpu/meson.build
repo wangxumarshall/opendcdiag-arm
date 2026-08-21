@@ -266,6 +266,59 @@ if framework_config.get('SANDSTONE_SSL_BUILD') == 1
         if_true: files(
             # Tests that depends on openssl
             'openssl/openssl_sha.cpp',
+            # Intel IPSEC suite. On x86-64 the _sse/_avx/_avx512/_x86_64
+            # variants gate on x86 arch constants via IPSEC_X86_GATE(); on
+            # AArch64 the gate is dropped (the variants are all portable
+            # OpenSSL C — the suffix names OpenSSL's internal runtime-dispatched
+            # provider path, not test-source intrinsics), so every variant
+            # builds on AArch64 and OpenSSL's own dispatch picks the aarch64
+            # crypto backends. See docs/IPSEC_ARM64_PORTING_PROPOSAL.md.
+            'ipsec/3des_docsis/ipsec_3des_docsis_aes_cmac_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_aes_cmac_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_aes_xcbc_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_aes_xcbc_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha1_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha1_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha224_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha224_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha256_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha256_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha384_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha384_x86_64.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha512_avx512.cpp',
+            'ipsec/3des_docsis/ipsec_3des_docsis_hmac_sha512_x86_64.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_aes_cmac_avx.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_aes_cmac_sse.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_hmac_sha1_avx.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_hmac_sha1_sse.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_sha2_224_avx.cpp',
+            'ipsec/aes128_cbc/ipsec_aes128_cbc_sha2_224_sse.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_sha2_384_avx.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_sha2_384_sse.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_sha2_512_avx.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_sha2_512_sse.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_xcbc_96_avx.cpp',
+            'ipsec/aes192_cbc/ipsec_aes192_cbc_xcbc_96_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha1_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha1_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha224_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha224_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha256_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha256_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha384_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha384_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha512_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_hmac_sha512_sse.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_xcbc_avx.cpp',
+            'ipsec/aes192_ctr/ipsec_aes192_ctr_xcbc_sse.cpp',
+            'ipsec/aes192_gcm/ipsec_aes192_gcm_avx512.cpp',
+            'ipsec/aes192_gcm/ipsec_aes192_gcm_avx.cpp',
+            'ipsec/aes192_gcm/ipsec_aes192_gcm_sse.cpp',
+            'ipsec/aes256_cbc/ipsec_aes256_cbc_hmac_sha1_avx.cpp',
+            'ipsec/aes256_cbc/ipsec_aes256_cbc_hmac_sha1_sse.cpp',
+            'ipsec/aes256_cbc/ipsec_aes256_cbc_sha2_224_avx.cpp',
+            'ipsec/aes256_cbc/ipsec_aes256_cbc_sha2_224_sse.cpp',
+            'ipsec/aes256_cbc/ipsec_aes256_cbc_sha2_256_avx.cpp',
         )
     )
 elif target_machine.system() == 'windows'

@@ -26,6 +26,11 @@ constexpr struct test_group group_fuzzing = {
                "Tests that fuzz framework functions using AFL++ persistent mode"),
 };
 
+constexpr struct test_group group_ipsec = {
+    TEST_GROUP("ipsec",
+               "Tests that perform ipsec computations"),
+};
+
 constexpr struct test_group group_special = {
     TEST_GROUP("special",
                "Special framework-inserted tests"),

@@ -43,3 +43,7 @@ unittests_sources += files(
 premain_files += files(
     'premain.cpp',
 )
+
+# ARM64 RAS/SDC/ECC backend (aarch64 only). The subdir's own meson.build is
+# gated on host_machine.cpu_family() == 'aarch64', so x86-64 is a no-op.
+subdir('arm64')

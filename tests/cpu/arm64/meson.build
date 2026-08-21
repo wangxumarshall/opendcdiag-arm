@@ -23,6 +23,7 @@ if host_machine.cpu_family() == 'aarch64'
         # droop and excite transient SDC on the SIMD/FMA path — the only
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
+        'sdc_test.cpp',
     )
 
     arm64_tests_lib = static_library(
