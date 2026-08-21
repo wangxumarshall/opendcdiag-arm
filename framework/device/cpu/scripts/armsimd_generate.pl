@@ -5,12 +5,15 @@
 
 # Generate cpu_features.h for AArch64 from simd-arm.conf.
 #
-# Mirrors x86simd_generate.pl's output contract (so cpu_device.cpp and
-# cpuid_internal.h consume it unchanged): it emits device_features_t,
-# CPU_FEATURE_CONSTANT, cpu_feature_* / cpu_* macros, features_string,
-# features_indices, x86_locators (count-only matters for to_string), and
-# X86Architecture/x86_architectures.  The locator carries {HWCAP set, bit}
-# pairs instead of CPUID leaf+bit.
+# Emits an ARM64-NATIVE symbol contract (decoupled from x86's, so an
+# x86-side rename can neither drop this arch's features nor collide):
+# device_features_t, CPU_FEATURE_CONSTANT, cpu_feature_* / cpu_* macros,
+# features_string, features_indices, arm64_locators (count-only matters
+# for to_string), and Arm64Architecture/arm64_architectures.  The locator
+# carries {HWCAP set, bit} pairs instead of CPUID leaf+bit.  Consumers
+# (cpu_device.cpp, cpuid_internal.h) select this contract via
+# #if defined(__aarch64__) and the x86 contract via #else, so the two
+# arches never share a symbol name.
 
 use strict;
 $\ = "\n";
@@ -185,22 +188,24 @@ for my $f (@features) {
 }
 print '        ;';
 
-# C++ enums (same shape as x86 generator)
+# C++ enums (ARM64-specific names; NOT shared with the x86 generator, so this
+# arch's feature symbols are decoupled from x86 and cannot be silently dropped
+# by an x86-side rename). Same enum shape, ARM64-native names.
 print q|
 #if (defined __cplusplus) && __cplusplus >= 201103L
-enum X86CpuFeatures : device_features_t {|;
+enum Arm64CpuFeatures : device_features_t {|;
 for (@features) {
     print "    CpuFeature$_->{id} = cpu_feature_" . lc($_->{id}) . ",";
 }
-print "}; // enum X86CpuFeatures\n";
-print "enum X86cpuArchitectures : device_features_t {";
+print "}; // enum Arm64CpuFeatures\n";
+print "enum Arm64cpuArchitectures : device_features_t {";
 for (@architecture_names) {
     my $a = $architectures{$_};
     my $name = $a->{name};
     $name =~ s/[^A-Za-z0-9]//g;
     print "    CpuArch$name = cpu_" . lc($a->{id}) . ",";
 }
-print "}; // enum X86cpuArchitectures";
+print "}; // enum Arm64cpuArchitectures";
 print "\n#endif /* C++11 */";
 
 # String table + indices (used by device_features_to_string)
@@ -225,6 +230,9 @@ print "\n};";
 # Locator table.  Each entry encodes {HWCAP set (0=HWCAP, 1=HWCAP2), bit}.
 # We pack it as a struct so cpuid_internal.h's ARM detect_cpu() can decode it;
 # cpu_device.cpp's device_features_to_string only relies on array length.
+# ARM64-native symbol name (arm64_locators) — decoupled from x86's
+# x86_locators so an x86-side change can neither drop this arch's features
+# nor collide with them.
 print "
 // HWCAP set: 0 = AT_HWCAP, 1 = AT_HWCAP2
 struct ArmHwcapLocator
@@ -233,7 +241,7 @@ struct ArmHwcapLocator
     uint8_t bit;
 };
 
-static const struct ArmHwcapLocator x86_locators[] = {";
+static const struct ArmHwcapLocator arm64_locators[] = {";
 for my $f (@features) {
     # NONE source = synthetic, never set (hwcap_set 2 matches no real HWCAP word)
     my $s = ($f->{source} eq 'HWCAP2') ? 1 : ($f->{source} eq 'NONE' ? 2 : 0);
@@ -241,15 +249,15 @@ for my $f (@features) {
 }
 print "};";
 
-# Architecture table (for dump_device_info)
+# Architecture table (for dump_device_info) — ARM64-native names.
 print qq|
-struct X86Architecture
+struct Arm64Architecture
 {
     device_features_t features;
     char name[$maxarchnamelen + 1];
 };
 
-static const struct X86Architecture x86_architectures[] = {|;
+static const struct Arm64Architecture arm64_architectures[] = {|;
 my %sorted_archs;
 for (@architecture_names) {
     my $arch = $architectures{$_};

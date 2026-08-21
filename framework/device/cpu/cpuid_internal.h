@@ -267,9 +267,11 @@ static void check_missing_features(device_features_t features, device_features_t
 /*
  * On AArch64 the per-CPU capability bits are exposed at runtime via the
  * AT_HWCAP / AT_HWCAP2 auxval (see <asm/hwcap.h>), which we read with
- * getauxval().  The x86_locators[] table generated from simd-arm.conf
+ * getauxval().  The arm64_locators[] table generated from simd-arm.conf
  * encodes, for each feature, which HWCAP word it lives in (hwcap_set:
- * 0 = AT_HWCAP, 1 = AT_HWCAP2) and its bit number.
+ * 0 = AT_HWCAP, 1 = AT_HWCAP2) and its bit number.  arm64_locators is an
+ * ARM64-native symbol (decoupled from the x86 x86_locators contract); the
+ * two arches never share a locator symbol name.
  */
 static device_features_t detect_cpu()
 {
@@ -277,8 +279,8 @@ static device_features_t detect_cpu()
     unsigned long hwcap2 = getauxval(AT_HWCAP2);
 
     device_features_t features = 0;
-    for (size_t i = 0; i < std::size(x86_locators); ++i) {
-        const auto &loc = x86_locators[i];
+    for (size_t i = 0; i < std::size(arm64_locators); ++i) {
+        const auto &loc = arm64_locators[i];
         // hwcap_set: 0 = AT_HWCAP, 1 = AT_HWCAP2, 2 = synthetic/never-set
         unsigned long bits;
         switch (loc.hwcap_set) {
@@ -301,7 +303,7 @@ static void check_missing_features(device_features_t features, device_features_t
     fputs("Cannot run on this CPU.\n"
           "This application requires certain features not found in your CPU:",
           stderr);
-    for (size_t i = 0; i < std::size(x86_locators); ++i) {
+    for (size_t i = 0; i < std::size(arm64_locators); ++i) {
         if (missing & CPU_FEATURE_CONSTANT(i))
             fputs(features_string + features_indices[i], stderr);
     }

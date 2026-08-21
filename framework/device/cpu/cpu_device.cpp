@@ -10,11 +10,26 @@
 
 extern constexpr const device_features_t minimum_cpu_features = device_compiler_features;
 
+// The feature-detection tables are generated per-arch with arch-native
+// symbol names (arm64_locators / arm64_architectures on AArch64,
+// x86_locators / x86_architectures on x86-64), so the two contracts are
+// fully decoupled: an x86-side rename can neither drop ARM64 features nor
+// collide with them.  Select the current arch's contract here; the table
+// types are layout-compatible (both expose array length; both architecture
+// entries expose {features, name}).
+#if defined(__aarch64__)
+#  define CPU_LOCATORS       arm64_locators
+#  define CPU_ARCHITECTURES  arm64_architectures
+#else
+#  define CPU_LOCATORS       x86_locators
+#  define CPU_ARCHITECTURES  x86_architectures
+#endif
+
 std::string device_features_to_string(device_features_t f)
 {
     std::string result;
     const char *comma = "";
-    for (size_t i = 0; i < std::size(x86_locators); ++i) {
+    for (size_t i = 0; i < std::size(CPU_LOCATORS); ++i) {
         if (f & CPU_FEATURE_CONSTANT(i)) {
             result += comma;
             result += features_string + features_indices[i] + 1;
@@ -30,7 +45,7 @@ void dump_device_info()
 
     // find the best matching CPU
     const char *detected = "<unknown>";
-    for (const auto &arch : x86_architectures) {
+    for (const auto &arch : CPU_ARCHITECTURES) {
         if ((arch.features & device_features) == arch.features) {
             detected = arch.name;
             break;
