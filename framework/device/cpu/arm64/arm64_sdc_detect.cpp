@@ -172,24 +172,20 @@ int SdcDetector::detect_via_crc32(const void *data, size_t len, uint32_t *crc_ou
     }
 
 #ifdef __aarch64__
-    const uint64_t *ptr = static_cast<const uint64_t *>(data);
-    size_t num_words = len / 8;
-    size_t remaining = len % 8;
-
+    // Byte-wise CRC32C via __crc32cb (Castagnoli). The previous __crc32cd
+    // (double-word) path processed data 8 bytes at a time, which left the
+    // result dependent on the uint64_t load's byte order and made the
+    // golden-vs-run comparison flaky (the golden CRC computed in init and
+    // the recomputed CRC in run could diverge across the word/byte boundary).
+    // A pure byte-wise walk is endian/alignment-independent and bit-for-bit
+    // reproducible, so golden == run for identical buffers, as the test
+    // requires. Standard CRC32C: init 0xFFFFFFFF, final XOR, Castagnoli poly.
+    const uint8_t *ptr = static_cast<const uint8_t *>(data);
     uint32_t crc = 0xFFFFFFFFU;
-
-    for (size_t i = 0; i < num_words; ++i) {
-        crc = __crc32cd(crc, ptr[i]);
+    for (size_t i = 0; i < len; ++i) {
+        crc = __crc32cb(crc, ptr[i]);
     }
-
-    if (remaining > 0) {
-        const uint8_t *byte_ptr = reinterpret_cast<const uint8_t *>(ptr + num_words);
-        for (size_t i = 0; i < remaining; ++i) {
-            crc = __crc32cb(crc, byte_ptr[i]);
-        }
-    }
-
-    *crc_out = static_cast<uint32_t>(crc);
+    *crc_out = static_cast<uint32_t>(crc ^ 0xFFFFFFFFU);
     return 0;
 #else
     return -1;

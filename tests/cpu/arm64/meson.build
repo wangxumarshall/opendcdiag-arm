@@ -18,6 +18,7 @@ if host_machine.cpu_family() == 'aarch64'
     arm64_tests = files(
         'neon_test.cpp',
         'crypto_test.cpp',
+        'sdc_test.cpp',
     )
 
     arm64_tests_lib = static_library(
