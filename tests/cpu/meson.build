@@ -95,8 +95,11 @@ tests_set_base.add(
     if_true : files(
         'eigen_gemm/double14.cpp',
         'eigen_gemm/gemm_cdouble_dynamic_square.cpp',
+        'eigen_gemm/gemm_cdouble_dynamic_square_dump.cpp',
         'eigen_gemm/gemm_double_dynamic_square.cpp',
+        'eigen_gemm/gemm_double_dynamic_square_dump.cpp',
         'eigen_gemm/gemm_float_dynamic_square.cpp',
+        'eigen_gemm/gemm_float_dynamic_square_dump.cpp',
         'eigen_sparse/eigen_sparse.cpp',
         'eigen_svd/svd.cpp',
         'eigen_svd/svd_cdouble_noavx512.cpp',
