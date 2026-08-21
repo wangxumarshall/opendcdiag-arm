@@ -314,6 +314,21 @@ tests_set_base.add(
     )
 )
 
+# Arithmetic tests (multi-precision carry chains). Ported from the x86
+# ADCX/ADOX tests to ARM64. adcx/adcxlong use an ARM64 "adcs" inline-asm
+# carry chain (the ARM equivalent of the x86 adcx instruction); adox and
+# adcx_adox_interleaved are software-simulated via unsigned __int128 and have
+# no arch-specific code. All four build on aarch64; the inline-asm paths in
+# adcx/adcxlong are ARM64-native and are the point of those tests.
+tests_set_base.add(
+    files(
+        'arithmetic/adcx.cpp',
+        'arithmetic/adcx_adox_interleaved.cpp',
+        'arithmetic/adcxlong.cpp',
+        'arithmetic/adox.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
 
 # libatomic provides the __atomic_load_16 / __atomic_store_16 /
