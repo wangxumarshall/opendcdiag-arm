@@ -44,6 +44,29 @@ tests_set_base.add(
     files(
         'ifs/sandstone_ifs.c',
         'ifs/ifs.c',
+        # Memory test suite (ported from the reference tree). The 7 NEON-backed
+        # tests (vmovnt*, memcpy_variations_dyn) self-skip on non-aarch64 via
+        # #ifdef __aarch64__ guards in init/run; the other 12 are arch-neutral
+        # (std::memcpy / std::atomic / __sync_synchronize / portable inline asm).
+        'memory/memcpy0.cpp',
+        'memory/memcpy1.cpp',
+        'memory/memcpy_l1d_size.cpp',
+        'memory/memcpy_l2_cache_size.cpp',
+        'memory/memcpy_l3_cache_size.cpp',
+        'memory/memcpy_sem.cpp',
+        'memory/memcpy_shuffle.cpp',
+        'memory/memcpy_shuffle_v2.cpp',
+        'memory/mem_disambiguation.cpp',
+        'memory/mfence.cpp',
+        'memory/mfence_pure.cpp',
+        'memory/modified_sort.cpp',
+        'memory/memcpy_variations_dyn.cpp',
+        'memory/vmovnt1.cpp',
+        'memory/vmovnt1_vex.cpp',
+        'memory/vmovnt2.cpp',
+        'memory/vmovnt2_vex.cpp',
+        'memory/vmovnt3.cpp',
+        'memory/vmovnt3_vex.cpp',
         # Cache coherency / stress tests. cachebounce is portable (std::atomic);
         # cache_stress_aggressor uses ARM NEON under #ifdef __aarch64__ guards and
         # returns a clean EXIT_SKIP on non-aarch64 (x86-64 untouched).
