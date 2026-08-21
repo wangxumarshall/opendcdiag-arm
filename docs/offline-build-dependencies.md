@@ -96,7 +96,13 @@ dnf download --resolve --alldeps --destdir=$PWD openssl-devel gtest-devel
 ```bash
 # 拷贝整个目录到目标机后：
 cd ~/opendcdiag-offline
-sudo dnf install -y --disablerepo=* ./*.rpm       # 推荐（自动处理依赖顺序）
+# 排除 bootloader/固件/glibc 等受保护系统包（见下方坑点 7），避免
+# "this operation would remove protected packages: grub2-efi-aa64" 冲突：
+sudo dnf install -y --disablerepo=* \
+    --exclude=grub2\* --exclude=shim\* --exclude=mokutil \
+    --exclude=efivar --exclude=efibootmgr \
+    --exclude=glibc --exclude=glibc-common --exclude=glibc-devel --exclude=glibc-headers \
+    ./*.rpm
 # 或纯 rpm 方式（需手动保证顺序）：
 # sudo rpm -Uvh --nodeps ./*.rpm
 ```
@@ -155,6 +161,15 @@ ninja -C builddir
 4. **EPOL 仓未启用**：`libisa-l-devel` 只在 EPOL。离线场景把 RPM 拷过去 `rpm -ivh` 即可绕过仓库检查；或改用 everything 仓的 `libisal-devel`。
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。
 6. **磁盘空间**：完整构建（含 SVE/NEON 多后端）产物约 256 MB 单二进制 + 中间 `.a`，建议 builddir 所在盘预留 ≥ 2 GB。
+7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）及 `glibc` 等与构建无关的系统级包。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。OpenDCDiag 构建完全不依赖这些包，直接排除即可：
+   ```bash
+   sudo dnf install --disablerepo=* -y \
+       --exclude=grub2\* --exclude=shim\* --exclude=mokutil \
+       --exclude=efivar --exclude=efibootmgr \
+       --exclude=glibc --exclude=glibc-common --exclude=glibc-devel --exclude=glibc-headers \
+       ./*.rpm
+   ```
+   `install-deps.sh` 已内置这些排除项。若仍有个别受保护包冲突，追加对应 `--exclude=<名>`；或用 `--allowerasing` 允许替换（注意：会改动系统关键包，离线环境有风险）；或退回 `rpm -Uvh --nodeps --force ./*.rpm` 仅强装工具链。
 
 ---
 
