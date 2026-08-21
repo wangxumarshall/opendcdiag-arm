@@ -298,3 +298,7 @@ if host_machine.cpu_family() == 'aarch64'
         sandstone_tests += [tests_sve_a]
     endif
 endif
+
+# ARM64-specific test directory. The aarch64 guard lives inside
+# tests/cpu/arm64/meson.build; on x86-64 this subdir is a no-op.
+subdir('arm64')
