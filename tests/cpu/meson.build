@@ -352,6 +352,33 @@ tests_set_base.add(
     )
 )
 
+
+# JIT code-generation test suite. Each test mmaps executable memory and
+# emits a chain of machine-code instructions (at runtime, not compile-time)
+# to stress microarchitectural features: move elimination / register rename,
+# partial store-to-load forwarding, and VEX/EVEX/SSE upper-bits zero control.
+# Every source file carries dual-arch #if defined(__x86_64__) /
+# #elif defined(__aarch64__) guards: the x86 path emits x86-64 opcodes
+# (VEX/EVEX/RAX..R15); the aarch64 path emits ARM64 instructions (mov x/w,
+# NEON orr v, ldr/str q/d, strb/h). The three zero_control_vec_* tests probe
+# x86 AVX-512 YMM/ZMM upper-bits aliasing — a genuinely x86-only concept with
+# no ARM equivalent — so on aarch64 they skip cleanly (EXIT_SKIP +
+# OsNotSupportedSkipCategory) from init, matching the "truly-absent hardware
+# stays a documented stub" rule. The other four (move_elimination_*,
+# part_store_fwd) run real aarch64 JIT code. The whole set builds on all
+# arches unconditionally.
+tests_set_base.add(
+    files(
+        'jit/move_elimination_8_jit.cpp',
+        'jit/move_elimination_jit.cpp',
+        'jit/part_store_fwd_jit.cpp',
+        'jit/move_elimination_vec_evex_jit.cpp',
+        'jit/zero_control_vec_sse_jit.cpp',
+        'jit/zero_control_vec_evex_jit.cpp',
+        'jit/zero_control_vec_vex_jit.cpp',
+    )
+)
+
 # Arithmetic tests (multi-precision carry chains). Ported from the x86
 # ADCX/ADOX tests to ARM64. adcx/adcxlong use an ARM64 "adcs" inline-asm
 # carry chain (the ARM equivalent of the x86 adcx instruction); adox and
