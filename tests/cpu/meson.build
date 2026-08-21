@@ -80,6 +80,48 @@ tests_set_base.add(
     )
 )
 
+# Mesh/UPI inter-core traffic stress tests (27 tests, ported from the
+# reference tree). These are REAL ARM NEON ports: all NEON intrinsics
+# (vld1q_s32/vst1q_s32/vceqq_s32/etc.) are under #ifdef __aarch64__ with
+# an #else path that returns EXIT_SKIP via log_skip(CpuNotSupportedSkipCategory,
+# "to be implemented (placeholder): ARM NEON required for <test>") on
+# non-aarch64. DECLARE_TEST is outside the guard so the test is registered
+# on all arches and self-skips on x86-64 (no-op returning success is a bug).
+# The _mm_/__m strings appearing in 12 files are comments (e.g. "类似
+# _mm_sfence"), not real x86 intrinsics — verified 0 files have real x86 code.
+# Test IDs inherit x86 AVX/SSE naming from the reference port but use NEON.
+tests_set_base.add(
+    files(
+        'mesh/mesh_upi_avx_sym.cpp',
+        'mesh/mesh_upi_avx2_asymm_distrib_int.cpp',
+        'mesh/mesh_upi_avx2_asymm_distrib_write_int.cpp',
+        'mesh/mesh_upi_avx2_asymm_int.cpp',
+        'mesh/mesh_upi_avx2_asymm_write_int.cpp',
+        'mesh/mesh_upi_avx2_read_L3_int.cpp',
+        'mesh/mesh_upi_avx2_read_only_int.cpp',
+        'mesh/mesh_upi_avx2_symm_int.cpp',
+        'mesh/mesh_upi_avx2_write_only_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_distrib_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_distrib_write_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_read_L3_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_read_only_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_write_int.cpp',
+        'mesh/mesh_upi_avx512_asymm_write_only_int.cpp',
+        'mesh/mesh_upi_avx512_sym.cpp',
+        'mesh/mesh_upi_avx512_symm_int.cpp',
+        'mesh/mesh_upi_sse_asymm_distrib_int.cpp',
+        'mesh/mesh_upi_sse_asymm_distrib_write_int.cpp',
+        'mesh/mesh_upi_sse_asymm_int.cpp',
+        'mesh/mesh_upi_sse_asymm_write_int.cpp',
+        'mesh/mesh_upi_sse_read_L3_int.cpp',
+        'mesh/mesh_upi_sse_read_only_int.cpp',
+        'mesh/mesh_upi_sse_sym.cpp',
+        'mesh/mesh_upi_sse_symm_int.cpp',
+        'mesh/mesh_upi_sse_write_only_int.cpp',
+    )
+)
+
 # Lock test suite (9 tests, std::atomic/std::atomic_flag-based, no x86
 # intrinsics, no inline asm — portable C++ that builds on all arches).
 tests_set_base.add(
