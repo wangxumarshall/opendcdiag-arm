@@ -161,19 +161,21 @@ ninja -C builddir
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。
 6. **磁盘空间**：完整构建（含 SVE/NEON 多后端）产物约 256 MB 单二进制 + 中间 `.a`，建议 builddir 所在盘预留 ≥ 2 GB。
 7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）、initramfs 链（`dracut`、`os-prober`、`kpartx`、`device-mapper`、`fuse`）及系统核心（`glibc`、`systemd`、`pam`、`setup`、`filesystem`、`basesystem`、`shadow`、`openEuler-release` 等）。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。OpenDCDiag 构建完全不依赖这些包。
-   **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf。`install-deps.sh` 已内置：按前缀静态排除受保护/无关系统包，再对每个剩余 RPM 用 `rpm -q` 检测目标机是否已装同名包，已装即跳过（保留目标机版本，避免降级冲突）。
+   **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf。`install-deps.sh` 已内置：按前缀静态排除受保护/无关系统包（`EXCLUDE_RE`），再跳过目标机已装同版本包（`skip_if_installed`），最后拓扑排序（见坑点 8）后传给 dnf。
 
-8. **下载机与目标机 openEuler 版本不一致（SP3 下载、SP4 目标）**：这是离线构建最隐蔽的坑。当两机版本不同时，下载树里的 `audit-libs`/`openssl-libs`/`rpm`/`cyrus-sasl-lib`/`openssl-pkcs11` 等 RPM 比目标机已装的旧，dnf 拒绝降级且目标机的 `bind-libs`/`rng-tools`/`opensc`/`trousers`/`python3-rpm` 等依赖更新版 → 冲突；更棘手的是 `glibc-devel`（SP3）精确 `Requires: glibc = 2.38-84.sp3`，装到 SP4 会要求降级 glibc 触发 protected 冲突，而不装则 gcc/libxcrypt-devel 缺依赖。
-   - **正解**：在与目标机**同版本**的 openEuler（如 SP4）机器上重跑 `download-deps.sh` 重新下载 RPM 树，保证版本一致。
-   - **兜底**：`install-deps.sh` 会自动跳过目标机已装的包（`skip_if_installed`），解决大部分降级冲突；但 `glibc-devel` 若目标机未装仍会尝试装 SP3 版并失败，此时用方案 4 的 `sudo rpm -Uvh --nodeps --force "${KEEP[@]}"` 强装工具链跳过精确版本约束（gcc 实际不链接 glibc-devel 的 `.so`，只编译期需要头文件，目标机若有 `/usr/include` 的 glibc 头即可用）。
+8. **OS 版本管控 + 依赖拓扑排序**：离线构建的根因性坑是**下载机与目标机 openEuler 版本不一致**（如 SP3 下载、SP4 目标）。这会引发两类无法兜底的冲突：降级冲突（`audit-libs`/`openssl-libs`/`rpm` 等旧版替换新版）和 `glibc-devel` 精确版本依赖死结（SP3 `glibc-devel` `Requires: glibc = 2.38-84.sp3`，装到 SP4 要求降级受保护的 glibc，不装则 gcc 缺依赖）。
+   - **严格版本匹配（正解）**：`download-deps.sh` 检测下载机 OS 版本，在输出目录写 `.os-version` 标记文件（内容如 `openEuler-24.03LTS_SP3`）；`install-deps.sh` 读标记并与目标机版本严格比对，**不一致则拒绝安装**并指引到同版本机重下。版本一致时 SPx glibc-devel 对应 SPx glibc，精确版本依赖自然满足，死结消失。三个脚本共享 `scripts/offline-build/_common.sh` 的 `detect_os_sp`/`detect_os_version_full`/`require_openeuler`。
+   - **依赖拓扑排序**：`install-deps.sh` 对每个候选 RPM 用 `rpm -qp --provides`/`--requires` 提取依赖符号，建依赖图（若 B 的 require 由候选 RPM A 提供且未被目标机已装包满足，则建边 A→B），`tsort` 拓扑排序后按序传给 dnf。这保证 `libgcc`/`glibc-devel`/`gmp`/`mpfr`/`binutils` 等基础层先于 `gcc` 安装，避免"依赖未就绪"。目标机已装包提供的符号不建边（否则会把系统已满足的依赖当卡点）。版本匹配前提下，排序后整批传 dnf 一次装通；dnf 内部也会再排序，脚本层的显式排序提供确定性 + 可读性。
+   - 兜底：dnf 仍失败时，按脚本提示的 `--allowerasing` 或 `rpm -Uvh --nodeps --force` 逐个强装（仅版本不匹配且无法重下时）。
 
 ---
 
 ## 6. 一键离线脚本（可在目标机直接跑）
 
 见仓库 `scripts/offline-build/` 下的：
-- `download-deps.sh` — 在有网机上拉取全部 RPM
-- `install-deps.sh` — 在无网机上离线安装
-- `build.sh` — 标准构建 + 验证
+- `_common.sh` — 共享的 openEuler 版本检测逻辑（被下面三个脚本 source）
+- `download-deps.sh` — 在有网机上拉取全部 RPM（含 OS 版本标记写入）
+- `install-deps.sh` — 在无网机上离线安装（含版本核对 + 依赖拓扑排序）
+- `build.sh` — 标准构建 + 验证（含版本检测）
 
 （如该目录不存在，按本文件第 3 节手写即可，步骤已最小化。）
