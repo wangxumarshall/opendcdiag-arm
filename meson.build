@@ -260,6 +260,17 @@ if target_machine.system() != 'windows'
     gtest_dep = dependency('gtest_main', required: false)
 endif
 
+# On aarch64, std::atomic<__int128> (used by the atomic_simd_128 test, and
+# by anything else doing 128-bit atomic store/load) is not lock-free under
+# GCC 12 on this platform and emits calls to the libatomic helpers
+# __atomic_store_16 / __atomic_load_16. Link libatomic so those resolve.
+# On x86-64, 16-byte atomics are lock-free via CMPXCHG16B, so no libatomic
+# is needed (and this branch is skipped entirely by the arch guard).
+atomic_dep = []
+if host_machine.cpu_family() == 'aarch64'
+    atomic_dep = cc.find_library('atomic')
+endif
+
 if get_option('coverage') == true
     gcov_dep = cc.find_library('gcov')
     target_deps += [gcov_dep]
@@ -277,6 +288,7 @@ target_deps += [
     boost_dep,
     dl_dep,
     pthread_dep,
+    atomic_dep,
 ]
 
 top_incdir = include_directories('.')
