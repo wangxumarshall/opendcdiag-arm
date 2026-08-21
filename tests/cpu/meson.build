@@ -78,6 +78,24 @@ if host_machine.cpu_family() == 'aarch64'
     )
 endif
 
+# Atomic / memory-ordering test suite. The NEON-backed variants
+# (atomic_simd_128/256/512) guard their ARM SIMD usage with #ifdef
+# __aarch64__ and return a clean placeholder skip on other arches
+# (CLAUDE.md placeholder-test honesty). atomic_seq_cst and atomic_simd_128
+# (which uses the portable __int128 extension, not NEON) build on all
+# arches. The two *_unaligned SIMD tests are kept commented out, matching
+# the reference tree's selection.
+tests_set_base.add(
+    files(
+        'atomic/atomic_simd_128.cpp',
+        #'atomic/atomic_simd_128_unaligned.cpp',
+        'atomic/atomic_simd_256.cpp',
+        #'atomic/atomic_simd_256_unaligned.cpp',
+        'atomic/atomic_simd_512.cpp',
+        'atomic/atomic_seq_cst.cpp',
+    )
+)
+
 if framework_config.get('SANDSTONE_SSL_BUILD') == 1
     tests_set_base.add(
         when : crypto_dep,

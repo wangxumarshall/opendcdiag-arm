@@ -261,6 +261,7 @@ if target_machine.system() != 'windows'
     gtest_dep = dependency('gtest_main', required: false)
 endif
 
+
 # On aarch64, std::atomic<__int128> (used by the spinlock_stress_cmpxchg16b
 # test for 128-bit CAS) lowers to calls to the libatomic runtime helpers
 # (__atomic_load_16 / __atomic_store_16 / __atomic_compare_exchange_16).
@@ -290,6 +291,7 @@ target_deps += [
     dl_dep,
     libatomic_dep,
     pthread_dep,
+    atomic_dep,
 ]
 
 top_incdir = include_directories('.')
