@@ -155,6 +155,26 @@ tests_set_base.add(
     )
 )
 
+# Gather/scatter tests. These are software-simulated gather/scatter using
+# plain double/int arrays and std::mt19937 — no x86 intrinsics, no arm_neon.h.
+# The x86 AVX-style names (gatherscatterpd/ps) are inherited from the
+# reference tree; the implementations are portable C++ that run identically
+# on both x86-64 and aarch64.
+tests_set_base.add(
+    files(
+        'gather/gather_f32.cpp',
+        'gather/gather_f64.cpp',
+        'gather/gather_i32.cpp',
+        'gather/gather_i64.cpp',
+        'gather/gatherscatter_f32.cpp',
+        'gather/gatherscatter_f64.cpp',
+        'gather/gatherscatter_i32.cpp',
+        'gather/gatherscatter_i64.cpp',
+        'gather/gatherscatterpd.cpp',
+        'gather/gatherscatterps.cpp',
+    )
+)
+
 tests_config_base = tests_set_base.apply(tests_config)
 
 tests_base_a = static_library(
