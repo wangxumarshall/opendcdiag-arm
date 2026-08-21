@@ -1,0 +1,3 @@
+[submodule "third-part/rpms"]
+	path = third-part/rpms
+	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm.git
