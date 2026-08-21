@@ -72,6 +72,11 @@ tests_set_base.add(
         # returns a clean EXIT_SKIP on non-aarch64 (x86-64 untouched).
         'cache/cachebounce.cpp',
         'cache/cache_stress_aggressor.cpp',
+        # Load-port pressure test (ported from the reference tree). Uses NEON
+        # 128-bit vld1q_u32/vst1q_u32 under #ifdef __aarch64__ and returns a
+        # clean EXIT_SKIP ("to be implemented (placeholder): ARM NEON required")
+        # on non-aarch64 (x86-64 untouched).
+        'load_port/load_port.cpp',
     )
 )
 
