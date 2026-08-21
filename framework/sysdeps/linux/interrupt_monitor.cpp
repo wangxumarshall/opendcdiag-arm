@@ -6,6 +6,10 @@
 #include <interrupt_monitor.hpp>
 #include <sandstone_p.h>
 
+#include <dirent.h>
+#include <string>
+
+#if defined(__x86_64__)
 constexpr const char * const proc_interrupts_file = "/proc/interrupts";
 
 static bool is_kernel_blank(char c)
@@ -124,3 +128,69 @@ std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
     fseek(f, 0, SEEK_SET);
     return result;
 }
+
+#elif defined(__aarch64__)
+/*
+ * On AArch64 there are no x86-style per-CPU MCE/TRM interrupt lines in
+ * /proc/interrupts. Hardware error (RAS) reporting is done through the
+ * EDAC subsystem, which exposes per-memory-controller correctable (ce)
+ * and uncorrectable (ue) error counts under
+ *   /sys/devices/system/edac/mc/mcN/ce_count
+ *   /sys/devices/system/edac/mc/mcN/ue_count
+ * (one directory per memory controller).
+ *
+ * We aggregate those into a single "machine-check/hardware-error" count
+ * (MCE type). The count is controller-wide rather than per-CPU, so we
+ * place it at index 0 of the returned vector and leave the rest as 0;
+ * mce_check treats any nonzero delta as a hardware error detected
+ * during the run, which is the right semantics for RAS events.
+ *
+ * Thermal interrupt counts are not exposed this way on ARM, so the
+ * Thermal type returns an empty vector (count_thermal_events() -> 0).
+ */
+
+static uint64_t read_edac_total(const char *counter_name)
+{
+    constexpr const char *edac_mc_dir = "/sys/devices/system/edac/mc";
+    DIR *dir = opendir(edac_mc_dir);
+    if (!dir)
+        return 0;
+
+    uint64_t total = 0;
+    struct dirent *de;
+    while ((de = readdir(dir)) != nullptr) {
+        if (strncmp(de->d_name, "mc", 2) != 0)
+            continue;
+        std::string path = std::string(edac_mc_dir) + "/" + de->d_name + "/" + counter_name;
+        AutoClosingFile f{ fopen(path.c_str(), "r") };
+        if (f) {
+            unsigned long long n = 0;
+            if (fscanf(f, "%llu", &n) == 1)
+                total += n;
+        }
+    }
+    closedir(dir);
+    return total;
+}
+
+std::vector<uint32_t> InterruptMonitor::get_interrupt_counts(InterruptType type)
+{
+    static_assert(InterruptMonitorWorks);
+    std::vector<uint32_t> result;
+    if (type != MCE)
+        return result;   // no ARM equivalent for the TRM interrupt line
+
+    uint64_t count = read_edac_total("ce_count") + read_edac_total("ue_count");
+
+    // Size the vector to cover all logical CPUs so callers that index by
+    // OS CPU number (mce_check_run) don't go out of bounds. The single
+    // controller-wide count lives at index 0.
+    int max_cpu = 0;
+    for (int i = 0; i < device_count(); ++i)
+        max_cpu = std::max(max_cpu, int(device_info[i].cpu_number));
+    result.assign(max_cpu + 1, 0);
+    result[0] = uint32_t(count);
+    return result;
+}
+
+#endif // __x86_64__ / __aarch64__

@@ -638,6 +638,14 @@ static void inline __attribute__((always_inline)) assembly_marker(P param = 0)
     asm ("movl %0, %%ebx\n\t"
          "fs addr32 nop"
         : : "i" (X ^ Y), "D" (param) : "ebx");
+#else
+    /* On non-x86 (e.g. AArch64) there is no Intel SDE to hook (it is an
+     * x86 instruction-set emulator), so there is no marker instruction to
+     * emit. The noinline test_start()/test_end() functions themselves still
+     * serve as symbol anchors that Valgrind's --toggle-collect can latch
+     * onto by name, which is the only external tool that runs on AArch64
+     * here. (void) param; keeps the parameter used. */
+    (void) param;
 #endif
 }
 

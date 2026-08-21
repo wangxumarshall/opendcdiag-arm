@@ -38,6 +38,8 @@
 
 #ifdef __x86_64__
 #  include "amx_common.h"
+#elif defined(__aarch64__)
+#  include <arm_neon.h>
 #endif
 
 #ifdef _WIN32
@@ -944,7 +946,22 @@ static void cause_sigill()
                 "x" (one)
                 );
 #elif defined(__aarch64__)
-    asm("udf #0x1234");
+    /* Pre-fill GPR and NEON/FPSIMD state so the crash-context dumper (which
+     * decodes mcontext.regs[] + the fpsimd_context in __reserved[]) has real
+     * non-zero values to report, mirroring what the x86 path does for
+     * SSE/AVX/AMX. UDF #0x1234 raises SIGILL. */
+    uint32_t rnd = random32();
+    int *errno_location = &errno;
+    int local_thread_num = thread_num;
+    double d1 = std::numeric_limits<double>::epsilon();
+    double d2 = std::numeric_limits<double>::quiet_NaN();
+    uint8x16_t v0 = vdupq_n_u8(0x42);
+    uint64x2_t v1 = vdupq_n_u64(0xdeadbeefULL);
+    asm volatile("udf #0x1234"
+                 :
+                 : "x"(local_thread_num), "x"(rnd), "x"(errno_location),
+                   "w"(d1), "w"(d2), "w"(v0), "w"(v1)
+                 : "memory");
 #else
     __builtin_trap();
 #endif

@@ -522,6 +522,14 @@ bool read_msr(int cpu, uint32_t msr, uint64_t *value);
 /// requires root privileges.
 bool write_msr(int cpu, uint32_t msr, uint64_t value);
 #else
+/* AArch64 (and other non-x86) has no model-specific registers and no
+ * /dev/cpu/N/msr device. The callers that used to rely on MSRs all have
+ * portable fallbacks: CPU identity (family/model/stepping) comes from the
+ * MIDR sysfs node (topology.cpp), microcode/PPIN are read from sysfs via
+ * detect_*_via_os() (and ARM has no CPU microcode/PPIN hardware anyway),
+ * and SMI counting (MSR 0x34) has no ARM equivalent -- the smi_count
+ * test is a SKIP stub. So these stubs intentionally report "not
+ * available" rather than accessing a non-existent device. */
 static inline bool read_msr(int cpu, uint32_t msr, uint64_t *value)
 {
     (void) cpu; (void) msr; (void) value;

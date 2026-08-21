@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "sandstone_kvm.h"
 
@@ -17,7 +18,24 @@ int kvm_generic_run(struct test *test, int cpu)
 
 int kvm_generic_init(struct test *t)
 {
-    log_skip(DeviceNotConfiguredSkipCategory, "Virtualization support not implemented on this platform");
+    /* This generic path is used on architectures where the framework has no
+     * KVM guest backend (e.g. AArch64). The x86-64 backend in
+     * sysdeps/linux/kvm.c drives a small in-process KVM guest; an AArch64
+     * counterpart would need the ARM KVM API (KVM_ARM_* vcpu/MPIDR/regs
+     * setup) and is not yet implemented.
+     *
+     * Distinguish "the framework lacks an ARM KVM guest" from "this host
+     * has no KVM at all" so the skip reason is accurate. */
+    bool host_has_kvm = (access("/dev/kvm", F_OK) == 0);
+    if (host_has_kvm) {
+        log_skip(DeviceNotConfiguredSkipCategory,
+                 "KVM is available on this host but the framework's KVM guest "
+                 "backend is only implemented for x86-64 (no AArch64 guest "
+                 "support yet)");
+    } else {
+        log_skip(DeviceNotConfiguredSkipCategory,
+                 "No /dev/kvm on this host; KVM not available");
+    }
     return EXIT_SKIP;
 }
 
