@@ -24,6 +24,12 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # Out-of-order execution SDC stress — coverage-weak unit (OoO 56%).
+        # Pointer-chasing dependency chain, carry-dependent mixed ALU+memory
+        # chain, RW-hazard interleave, and long dependent ALU chains to stress
+        # the scheduler/ROB/rename under serial dependencies — the replay/
+        # rename surface no existing test targets. Built only on aarch64.
+        'ooo_dep_chain_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
