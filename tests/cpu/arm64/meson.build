@@ -24,6 +24,12 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # L2 cache coherency/split-access SDC stress — coverage-weak unit
+        # (L2C 40%). Adds cross-64B-line exclusive ldxr/stxr RMW, store-to-load
+        # forwarding across the line boundary, dc-civac writeback probe, and a
+        # 2x-L2 thrash sweep — the coherency/snoop/split surfaces that
+        # memcpy_l2_cache_size never touches. Built only on aarch64.
+        'l2c_cross_cache_line_arm.cpp',
         # MMU/TLB/PTW SDC stress — the coverage-weakest unit (MMU 20%). Adds
         # page-color aliasing (one physical page, many VAs), dual-TLB-lookup
         # cross-page and cross-cache-line split accesses, and a large-ASID
