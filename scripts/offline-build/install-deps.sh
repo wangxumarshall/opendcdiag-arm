@@ -23,6 +23,13 @@ source "$SCRIPT_DIR/_common.sh"
 require_openeuler
 require_min_os
 
+# sudo 兼容: 容器内以 root 运行时无 sudo, 直接用裸命令。
+if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+else
+    SUDO=""
+fi
+
 # 默认指向 download-deps.sh 的输出目录
 RPMDIR="${1:-$(pwd)/opendcdiag-rpms}"
 
@@ -71,31 +78,46 @@ echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 拓扑排序后分批安
 # (grub2-*, shim, mokutil, efivar, efibootmgr, dracut, os-prober, kpartx,
 # device-mapper, fuse, glibc 本身, systemd, pam, setup, filesystem, ...)
 # 它们版本若有差异 dnf 会视升级为删除受保护包而拒绝。OpenDCDiag 不依赖它们。
-# glibc-devel / glibc-headers 不排除 (gcc 需要); 版本匹配时它们与目标机 glibc 配对。
+#
+# 匹配对象是 RPM 文件名 (形如 "name-version-release.arch.rpm"), 而非 %{NAME}。
+# 故前缀类包 (grub2/shim/...) 用 ^name 前缀匹配; 精确名包 (glibc/systemd/...)
+# 用 ^name-[0-9] 匹配 "名字后紧跟版本号", 这样能精确剔除 glibc 本体而保留
+# glibc-devel / glibc-headers (gcc 需要 glibc-devel)。旧版用 name$ 锚点对文件名
+# 永远不命中 (文件名带版本后缀), 实际一个受保护包都没排除掉。
 EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|'
-EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|'
-EXCLUDE_RE+='glibc$|glibc-common$|glibc-headers$|glibc-static$|'
-EXCLUDE_RE+='systemd$|systemd-libs$|systemd-udev$|'
-EXCLUDE_RE+='setup$|filesystem$|basesystem$|shadow$|pam$|'
-EXCLUDE_RE+='crypto-policies$|openEuler-release$|openEuler-gpg-keys$|openEuler-repos$)'
+EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|fuse3|'
+EXCLUDE_RE+='glibc-[0-9]|glibc-common-[0-9]|glibc-static-[0-9]|'
+EXCLUDE_RE+='systemd-[0-9]|systemd-libs-[0-9]|systemd-udev-[0-9]|'
+EXCLUDE_RE+='setup-[0-9]|filesystem-[0-9]|basesystem-[0-9]|shadow-[0-9]|pam-[0-9]|'
+EXCLUDE_RE+='crypto-policies-[0-9]|openEuler-release-[0-9]|openEuler-gpg-keys-[0-9]|openEuler-repos-[0-9])'
 
 # ---- B 类: 跳过目标机已装同版本包 (减少安装量, 避免无谓重装) ----
-# 版本严格匹配前提下, 已装即同版本, 跳过无损。
+# 注意: 容器基础镜像里 libgcc/libstdc++ 等可能是较旧的构建 (如 -105),
+# RPM 树里是较新的 (如 -111)。只看包名跳过会漏掉版本升级, 导致 gcc
+# (要求 libgcc >= 同版本) 找不到匹配提供者。故: 已装但版本-release 不同时
+# 不跳过, 让 dnf 升级。
 skip_if_installed() {
     local rpmfile="$1"
-    local name
+    local name nevra_installed nevra_file
     name=$(rpm -qp --qf '%{NAME}' --noscript --nodigest --nosignature "$rpmfile" 2>/dev/null)
     [ -z "$name" ] && return 1
-    if rpm -q "$name" >/dev/null 2>&1; then
-        return 0   # 已装, 跳过
+    if ! rpm -q "$name" >/dev/null 2>&1; then
+        return 1   # 未装, 不跳过
     fi
-    return 1
+    # 已装: 比较 版本-release, 不同则需升级 (不跳过)
+    nevra_installed=$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$name" 2>/dev/null)
+    nevra_file=$(rpm -qp --qf '%{VERSION}-%{RELEASE}' --noscript --nodigest --nosignature "$rpmfile" 2>/dev/null)
+    if [ "$nevra_installed" = "$nevra_file" ]; then
+        return 0   # 同版本, 跳过
+    fi
+    return 1       # 版本不同, 不跳过 (需升级)
 }
 
 # 收集候选: 排除 A 类 + 跳过 B 类已装
 KEEP=()
 SKIP_INSTALLED=0
-mapfile -t CANDIDATES < <(find "$RPMDIR" -maxdepth 1 -name '*.rpm' -printf '%f\n' \
+mapfile -t CANDIDATES < <(printf '%s\n' "$RPMDIR"/*.rpm 2>/dev/null \
+                          | while read -r f; do basename "$f"; done \
                           | grep -ivE "$EXCLUDE_RE" | sort)
 for n in "${CANDIDATES[@]}"; do
     if skip_if_installed "$RPMDIR/$n"; then
@@ -111,7 +133,7 @@ if [ ${#KEEP[@]} -eq 0 ]; then
 fi
 
 TOTAL=$(ls -1 ./*.rpm 2>/dev/null | wc -l)
-EXCLUDED_A=$(find . -maxdepth 1 -name '*.rpm' -printf '%f\n' | grep -icE "$EXCLUDE_RE")
+EXCLUDED_A=$(printf '%s\n' ./*.rpm 2>/dev/null | while read -r f; do basename "$f"; done | grep -icE "$EXCLUDE_RE")
 echo "    RPM 总数: $TOTAL"
 echo "    排除A(受保护/无关系统包): $EXCLUDED_A"
 echo "    跳过B(目标机已装): $SKIP_INSTALLED"
@@ -197,19 +219,23 @@ for f in $(printf '%s\n' "${INSTALL_LIST[@]:0:10}"); do
     echo "      $(rpm -qp --qf '%{NAME}' --noscript --nodigest --nosignature "$f" 2>/dev/null)"
 done
 
-# ---- 安装: 按拓扑顺序, 整批传给 dnf (dnf 在已排序基础上解析, 且能聚合冲突) ----
-if ! sudo dnf install --disablerepo=* -y "${INSTALL_LIST[@]}"; then
+# ---- 安装: 整批传给 dnf, 让 dnf 自行解析全部依赖 ----
+# 把所有候选 RPM 一次性喂给 dnf (而非逐包/分批), dnf 的依赖求解器能看到
+# 全部 provides/requires, 一次性把 gcc + libmpc + libmpfr + glibc-devel +
+# 全套一起装上。这比脚本自己拓扑排序逐批传更可靠 (后者会让 dnf 看不全
+# 依赖链而跳过 gcc 这种依赖多的包)。
+#
+# 标志:
+#   --allowerasing  允许替换容器基础镜像里已装的同名包 (版本略有差异时解冲突)
+#   --skip-broken   跳过实在装不上的个别包 (如 openssh 需 /sbin/nologin 但容器无)
+#   --nobest        不强求 best 候选, 装得上就装
+if ! $SUDO dnf install --disablerepo=* -y --allowerasing --skip-broken --nobest "${INSTALL_LIST[@]}"; then
     echo "" >&2
-    echo "==> dnf 离线安装失败。逐级兜底方案:" >&2
-    echo "    1) 若报版本降级冲突 (cannot install both X sp3 and sp4):" >&2
-    echo "       说明 .os-version 标记可能缺失或被绕过。确认下载机与本机同 SP 版本。" >&2
-    echo "    2) 若报精确版本依赖缺失 (nothing provides glibc = X.sp3):" >&2
+    echo "==> dnf 离线安装失败。常见原因:" >&2
+    echo "    1) 版本降级冲突 (cannot install both X sp3 and sp4):" >&2
+    echo "       .os-version 标记可能缺失或被绕过。确认下载机与本机同 SP 版本。" >&2
+    echo "    2) 精确版本依赖缺失 (nothing provides glibc = X.sp3):" >&2
     echo "       glibc-devel 等精确版本依赖无法跨 SP 满足, 必须用同版本 RPM 树。" >&2
-    echo "    3) 允许替换受保护包(改动系统关键包, 离线环境有风险):" >&2
-    echo "         sudo dnf install --disablerepo=* -y --allowerasing \"\${INSTALL_LIST[@]}\"" >&2
-    echo "    4) 按拓扑顺序逐个 rpm 强装跳过依赖 (最后兜底):" >&2
-    echo "         for f in \"\${INSTALL_LIST[@]}\"; do sudo rpm -Uvh --nodeps --force \"\$f\"; done" >&2
-    echo "       (会留下依赖不一致, 但能立即装上工具链以继续 build.sh)" >&2
     exit 1
 fi
 
