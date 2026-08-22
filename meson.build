@@ -8,10 +8,11 @@ project(
         'b_pie=true',
         'b_ndebug=if-release',
         'b_staticpic=true',
-        'c_std=gnu17',
-        # cpp_std is NOT set here; it is chosen dynamically below from the
-        # cxx_compat option + detected gcc version (gnu++23 on gcc12+, gnu++20
-        # on gcc10, gnu++17 below), then applied via add_project_arguments.
+        # c_std and cpp_std are NOT set here; both are chosen dynamically below
+        # from the cxx_compat option + detected gcc/meson version (gnu++23 on
+        # gcc12+, gnu++20 on gcc10, gnu++17 on gcc7; c17/gnu17 on meson that
+        # supports it, else gnu11 for very old meson like 0.54), then applied
+        # via add_project_arguments.
     ],
     # Lowered from >=1.3 to >=0.54 so the same build files work on older
     # openEuler LTS toolchains (20.03 ships meson 0.54.3, 22.03 ships 0.59.4).
@@ -78,6 +79,17 @@ endif
 # set cpp_std in project(default_options:) so meson does not warn about the
 # manual -std flag; the std is chosen dynamically from the detected gcc version.
 add_project_arguments('-std=' + cpp_std_resolved, language: 'cpp')
+
+# C standard: gnu17 on modern toolchains (gcc/meson that accept it); on very
+# old meson (0.54, openEuler 20.03) the c_std=gnu17 combo value is rejected
+# (meson 0.54 only knows c89/99/11 + gnu89/99/11). Probe the compiler's
+# acceptance of -std=gnu17 and fall back to gnu11 if needed. gcc 7.3 supports
+# gnu17 natively regardless of what meson's combo option names.
+c_std_resolved = 'gnu17'
+if not cc.has_argument('-std=gnu17')
+    c_std_resolved = 'gnu11'
+endif
+add_project_arguments('-std=' + c_std_resolved, language: 'c')
 
 # Numeric compat level consumed by framework/openeuler_compat.h:
 #   23 -> native std::to_underlying / std::span available
