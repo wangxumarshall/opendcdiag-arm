@@ -10,7 +10,9 @@
 #include "test_data.h"
 
 #include "openeuler_compat.h"
-#include <bit>
+#ifdef __cpp_lib_bit_ops
+#  include <bit>
+#endif
 #include <memory>
 #include <limits>
 #ifdef __cpp_lib_span

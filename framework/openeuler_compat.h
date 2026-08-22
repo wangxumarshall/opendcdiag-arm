@@ -63,6 +63,36 @@ to_underlying(E e) noexcept
 #endif /* __cpp_lib_to_underlying */
 
 /* ------------------------------------------------------------------ */
+/* std::bit ops (C++20, <bit>)                                         */
+/* ------------------------------------------------------------------ */
+/* openEuler 20.03's gcc 7 / libstdc++ 7 does not ship <bit> at all. The
+ * topology code uses std::popcount, std::countr_zero, std::bit_floor,
+ * std::rotl, std::bit_width — all trivially expressible via gcc builtins.
+ * On gcc 10+ (22.03/24.03) __cpp_lib_bit_ops is defined and the native <bit>
+ * is used (include sites gate on __cpp_lib_bit_ops); on gcc 7 these inline
+ * polyfills in namespace std activate. */
+#ifndef __cpp_lib_bit_ops
+#  include <cstddef>
+namespace std {
+constexpr int popcount(unsigned long long x) noexcept { return __builtin_popcountll(x); }
+constexpr int popcount(unsigned long x) noexcept { return __builtin_popcountl(x); }
+constexpr int popcount(unsigned int x) noexcept { return __builtin_popcount(x); }
+constexpr int countr_zero(unsigned long long x) noexcept { return x ? __builtin_ctzll(x) : (int)(sizeof(unsigned long long) * 8); }
+constexpr int countr_zero(unsigned long x) noexcept { return x ? __builtin_ctzl(x) : (int)(sizeof(unsigned long) * 8); }
+constexpr int countr_zero(unsigned int x) noexcept { return x ? __builtin_ctz(x) : (int)(sizeof(unsigned int) * 8); }
+constexpr int bit_width(unsigned long long x) noexcept { return (int)(8 * sizeof(unsigned long long)) - (x ? __builtin_clzll(x) : (int)(8 * sizeof(unsigned long long))); }
+constexpr int bit_width(unsigned long x) noexcept { return (int)(8 * sizeof(unsigned long)) - (x ? __builtin_clzl(x) : (int)(8 * sizeof(unsigned long))); }
+constexpr int bit_width(unsigned int x) noexcept { return (int)(8 * sizeof(unsigned int)) - (x ? __builtin_clz(x) : (int)(8 * sizeof(unsigned int))); }
+template <typename T> constexpr T bit_floor(T x) noexcept { return x ? (T(1) << bit_width(x)) >> 1 : T(0); }
+template <typename T> constexpr T rotl(T x, int s) noexcept {
+    constexpr int N = (int)(sizeof(T) * 8);
+    int r = s % N; if (r < 0) r += N;
+    return r == 0 ? x : (T)((unsigned T)(x) << r | (unsigned T)(x) >> (N - r));
+}
+} // namespace std
+#endif /* __cpp_lib_bit_ops */
+
+/* ------------------------------------------------------------------ */
 /* C++20 concepts / requires (language feature)                       */
 /* ------------------------------------------------------------------ */
 /* openEuler 20.03 ships gcc 7.3, which predates C++20 concepts entirely
