@@ -10,23 +10,16 @@
 
 static constexpr size_t VECTOR_SIZE = 8;   // 8 个单精度浮点数
 
-// 软件参考：使用 fmaf 逐元素计算（单次舍入）
+// 软件参考：使用 fmaf 逐元素计算（单次舍入）。NEON vfmaq_f32 也是单次
+// 舍入的 IEEE-754 FMA，因此对于有限（非 NaN/Inf 传播）操作数，硬件与
+// 软件结果必须按位一致。SDC 检测因此使用按位精确的 memcmp，而不是
+// 容差比较 —— 1e-6 的相对容差会让 FMA 数据通路中 1 位的翻转直接漏检，
+// 而这恰恰是本测试要捕获的故障。已验证：对于随机操作数，NEON vfmaq_f32
+// 与 fmaf 按位相同（100000 组随机三元组零分歧）。
 static void software_fma(const float *a, const float *b, const float *c, float *ref) {
     for (int i = 0; i < VECTOR_SIZE; ++i) {
         ref[i] = fmaf(a[i], b[i], c[i]);
     }
-}
-
-// 比较两个浮点数数组是否近似相等（允许 1e-6 相对误差）
-static bool approx_equal(const float *x, const float *y) {
-    for (int i = 0; i < VECTOR_SIZE; ++i) {
-        float diff = fabsf(x[i] - y[i]);
-        float tol = 1e-6f * fmaxf(fabsf(x[i]), fabsf(y[i]));
-        if (diff > tol && diff > 1e-7f) {
-            return false;
-        }
-    }
-    return true;
 }
 
 struct TestData {};
@@ -77,8 +70,9 @@ static int fma_run(struct test *test, int cpu) {
         float ref[VECTOR_SIZE];
         software_fma(a, b, c, ref);
 
-        // 比较硬件结果与参考
-        bool data_ok = approx_equal(result, ref);
+        // 按位精确比较硬件结果与参考（替换原先的 1e-6 容差比较
+        // approx_equal —— 容差比较会让 FMA 数据通路中 1 位的 SDC 漏检）。
+        bool data_ok = (memcmp(result, ref, sizeof(ref)) == 0);
 
         // 一致性测试：存储硬件结果到内存再加载比较
         float store_buf[VECTOR_SIZE];
@@ -110,7 +104,7 @@ static int fma_finish(struct test *test) {
     return EXIT_SUCCESS;
 }
 
-DECLARE_TEST(fma, "FMA instruction basic test (NEON single-precision)")
+DECLARE_TEST(fma, "FMA instruction basic test (NEON single-precision, byte-exact golden)")
     .groups = DECLARE_TEST_GROUPS(&group_math),
     .test_init = fma_init,
     .test_run = fma_run,
