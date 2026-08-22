@@ -223,6 +223,6 @@ for cmd in gcc g++ meson ninja perl python3 pkg-config ar objcopy; do
 done
 echo "  isal       $(ls /usr/lib64/libisal.a 2>/dev/null || echo '未装 (可选, 但 CRC 测试需要)')"
 echo "  boost hdr  $(ls /usr/include/boost/algorithm/string.hpp 2>/dev/null || echo 缺失)"
-echo "  eigen5     仓库自带 third-part/eigen5/ (无需系统包)"
+echo "  eigen5     仓库自带 third-party/eigen5/ (无需系统包)"
 
 echo "==> 安装完成。接下来运行 build.sh 构建项目。"

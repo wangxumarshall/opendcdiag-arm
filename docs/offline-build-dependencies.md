@@ -19,7 +19,7 @@
 
 关键事实（来自源码与实测）：
 
-1. **Eigen 5.0.0+ 仓库自带**于 `third-part/eigen5/`。aarch64 路径在 `tests/cpu/meson.build` 里直接 `include_directories('../../third-part/eigen5')`，**不依赖系统 eigen3**，也**不需要**再设 `PKG_CONFIG_PATH`（该 env 仅在你想让系统 pkg-config 看到 eigen5.pc 时用，但 aarch64 构建并不查询它）。`CLAUDE.md` 顶部那段 `PKG_CONFIG_PATH=./third-part/eigen5` 是历史遗留/兼容写法，aarch64 实际构建可省略——但**带上无害**，故离线脚本里保留以兼容未来 x86 路径。
+1. **Eigen 5.0.0+ 仓库自带**于 `third-party/eigen5/`。aarch64 路径在 `tests/cpu/meson.build` 里直接 `include_directories('../../third-party/eigen5')`，**不依赖系统 eigen3**，也**不需要**再设 `PKG_CONFIG_PATH`（该 env 仅在你想让系统 pkg-config 看到 eigen5.pc 时用，但 aarch64 构建并不查询它）。`CLAUDE.md` 顶部那段 `PKG_CONFIG_PATH=./third-party/eigen5` 是历史遗留/兼容写法，aarch64 实际构建可省略——但**带上无害**，故离线脚本里保留以兼容未来 x86 路径。
 2. **无 nasm 依赖**。`meson.build` 里虽定义了 `nasm_system_flags`，但**没有任何 `find_program('nasm')` 调用**，也没有 `.asm` 源文件被编译。aarch64 上不需要 nasm/yasm。
 3. **boost 只用头文件**。`framework/meson.build` 检查 `boost/algorithm/string.hpp` 与 `boost/type_traits/is_complex.hpp` 两个头；实测 `pkg-config --libs boost` 为空（header-only）。因此 `boost-devel` 足够，不需要 boost 的 `.so` 组件。
 4. **libisal(isa-l) 是必须的**（默认构建下 `cpp.find_library('isal', required:false, static:true)`，但 10 个 `isal_*` CRC 测试需要它）。openEuler 提供两个等价包：`libisa-l-devel`（EPOL 仓，2.30.0）与 `libisal-devel`（everything 仓，2.29.0）。两者都装 `/usr/include/isa-l/*.h` + `libisal.a/.so`。**任选其一**，推荐 `libisa-l-devel`（版本更新，且 EPOL 是 openEuler 主推应用仓）。当前这台机器上的 isal 是**源码编译安装**的（RPM 数据库不认领 `/usr/lib/libisal.a`），所以最小化环境应改用官方 RPM。
@@ -136,7 +136,7 @@ ninja -C builddir
 | 源码里的依赖查询 | pkg-config / find_library 名 | openEuler 包 | 提供的关键文件 |
 |---|---|---|---|
 | `dependency('boost')` + `check_header('boost/algorithm/string.hpp')` | `boost` | `boost-devel` | `/usr/include/boost/algorithm/string.hpp` |
-| `dependency('eigen3')`（aarch64 改用自带） | `eigen3` | **仓库自带** `third-part/eigen5/` | `third-part/eigen5/Eigen/*` |
+| `dependency('eigen3')`（aarch64 改用自带） | `eigen3` | **仓库自带** `third-party/eigen5/` | `third-party/eigen5/Eigen/*` |
 | `dependency('zlib')` | `zlib` | `zlib-devel` | `/usr/include/zlib.h`, `/usr/lib64/libz.{a,so}` |
 | `dependency('libzstd')` | `libzstd` | `zstd-devel` | `/usr/include/zstd.h`, `/usr/lib64/libzstd.{a,so}` |
 | `cpp.find_library('isal', static:true)` | （无 .pc，直接 find_library） | `libisa-l-devel` 或 `libisal-devel` | `/usr/include/isa-l/*.h`, `/usr/lib64/libisal.{a,so}` |
@@ -155,7 +155,7 @@ ninja -C builddir
 ## 5. 常见离线构建坑点
 
 1. **isal 找不到**：最小安装默认无 `libisa-l-devel`。症状：`Library isal found: NO`，10 个 `isal_*` 测试被静默剔除（构建仍成功，但测试数变少）。解决：装 `libisa-l-devel`（EPOL）或 `libisal-devel`（everything）。
-2. **eigen 版本错**：若误装系统 `eigen3-devel`（Eigen 3.3.x），aarch64 + GCC 12 会因 `deprecated-enum-enum` 转换在 `-Wextra` 下变硬错误而编译失败。**务必用仓库自带的 `third-part/eigen5`**；aarch64 路径已硬编码指向它，勿覆盖。
+2. **eigen 版本错**：若误装系统 `eigen3-devel`（Eigen 3.3.x），aarch64 + GCC 12 会因 `deprecated-enum-enum` 转换在 `-Wextra` 下变硬错误而编译失败。**务必用仓库自带的 `third-party/eigen5`**；aarch64 路径已硬编码指向它，勿覆盖。
 3. **meson 版本低**：openEuler 自带 `meson-1.3.1` 恰好满足 `>=1.3`；但若目标机装了更老的 meson（如 22.03 LTS 带的），需升级。离线包里带的 1.3.1 RPM 可直接用。
 4. **EPOL 仓未启用**：`libisa-l-devel` 只在 EPOL。离线场景把 RPM 拷过去 `rpm -ivh` 即可绕过仓库检查；或改用 everything 仓的 `libisal-devel`。
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。

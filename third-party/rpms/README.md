@@ -1,4 +1,4 @@
-# third-part/rpm
+# third-party/rpms
 
 OpenDCDiag (ARM64) 离线构建依赖 RPM 树。
 
@@ -14,7 +14,7 @@ OpenDCDiag (ARM64) 离线构建依赖 RPM 树。
 
 ```
 opendcdiag-arm (主仓)
-└── third-part/
+└── third-party/
     ├── eigen5/               # 仓内 Eigen 5(aarch64 构建用,详见主仓 CLAUDE.md)
     └── rpm/                  # 本目录
         ├── openEuler-20.03/  (submodule → opendcdiag-arm-rpm-20.03)
@@ -30,7 +30,7 @@ opendcdiag-arm (主仓)
 
 ```bash
 # 进入对应版本子目录运行 install-deps.sh
-cd third-part/rpm/openEuler-24.03/openEuler-24.03LTS_SP3
+cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3
 ../../../../scripts/offline-build/install-deps.sh .
 ```
 

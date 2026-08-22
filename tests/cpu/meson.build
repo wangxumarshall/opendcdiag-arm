@@ -271,14 +271,14 @@ endif
 
 # On aarch64, system Eigen 3.3.x breaks on GCC 12+ (deprecated-enum-enum
 # conversions turn into hard errors under the framework's -Wextra). The repo
-# ships Eigen 5.0.0+ under third-part/eigen5 for this exact reason, so prefer
+# ships Eigen 5.0.0+ under third-party/eigen5 for this exact reason, so prefer
 # it unconditionally on ARM64 and make the build self-contained (no need to
-# export PKG_CONFIG_PATH=./third-part/eigen5). On x86-64 keep the historical
+# export PKG_CONFIG_PATH=./third-party/eigen5). On x86-64 keep the historical
 # behaviour of looking up the system eigen3 via pkg-config.
 if host_machine.cpu_family() == 'aarch64'
     eigen3_dep = declare_dependency(
         include_directories: include_directories(
-            '../../third-part/eigen5',
+            '../../third-party/eigen5',
             is_system : true,
         ),
     )
