@@ -30,9 +30,9 @@ echo "==> 构建目录: $BUILD"
 # 保留 PKG_CONFIG_PATH 仅为兼容 x86 路径(若在该分支上构建). 无害.
 echo "==> meson setup..."
 if [ ! -d "$BUILD" ]; then
-    PKG_CONFIG_PATH="$SRC/third-part/eigen5" meson setup "$BUILD" --buildtype=release
+    PKG_CONFIG_PATH="$SRC/third-party/eigen5" meson setup "$BUILD" --buildtype=release
 else
-    PKG_CONFIG_PATH="$SRC/third-part/eigen5" meson setup --reconfigure "$BUILD" --buildtype=release
+    PKG_CONFIG_PATH="$SRC/third-party/eigen5" meson setup --reconfigure "$BUILD" --buildtype=release
 fi
 
 echo "==> ninja..."

@@ -12,8 +12,8 @@ The central header is `framework/sandstone.h` — the authoritative API referenc
 
 ```console
 # ARM64 requires Eigen 5.0.0+ (system Eigen 3.3.x breaks on GCC 12+).
-# The repo ships third-part/eigen5; create its pkg-config file once:
-PKG_CONFIG_PATH=./third-part/eigen5 meson setup builddir --buildtype=release
+# The repo ships third-party/eigen5; create its pkg-config file once:
+PKG_CONFIG_PATH=./third-party/eigen5 meson setup builddir --buildtype=release
 ninja -C builddir
 
 # Default binary: builddir/opendcdiag
@@ -27,7 +27,7 @@ ninja -C builddir
 ./builddir/opendcdiag --on-crash=context -e selftest_sigsegv -vv  # crash backtrace dump
 
 # OpenSSL SHA test is opt-in (default ssl_link_type=none → not built):
-PKG_CONFIG_PATH=./third-part/eigen5 meson setup --reconfigure builddir \
+PKG_CONFIG_PATH=./third-party/eigen5 meson setup --reconfigure builddir \
     --buildtype=release -Dssl_link_type=dynamic
 ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
 ```
