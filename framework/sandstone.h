@@ -10,6 +10,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <unistd.h>     /* getpid() and friends — pulled in transitively by
+                           gcc 12's libstdc++ but not by gcc 10's; several
+                           tests/framework files use getpid() without their
+                           own <unistd.h>, so include it here (the central
+                           header) so the public API is self-contained. */
 
 #ifdef __x86_64__
 #pragma GCC diagnostic push

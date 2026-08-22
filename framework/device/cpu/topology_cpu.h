@@ -13,7 +13,13 @@
 #include "gettid.h"
 
 #include <algorithm>
-#include <barrier>
+// <barrier> is a C++20 header absent from libstdc++ 10 (openEuler 22.03's gcc
+// 10.3). sandstone.h (included above) pulls in framework/openeuler_compat.h,
+// which provides a std::barrier polyfill when __cpp_lib_barrier is undefined.
+// Only #include the system <barrier> when the toolchain actually has it.
+#ifdef __cpp_lib_barrier
+#  include <barrier>
+#endif
 #include <functional>
 #include <mutex>
 #include <span>

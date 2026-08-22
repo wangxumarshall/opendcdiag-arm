@@ -76,6 +76,81 @@ to_underlying(E e) noexcept
 #endif
 
 /* ------------------------------------------------------------------ */
+/* std::barrier (C++20, <barrier>)                                    */
+/* ------------------------------------------------------------------ */
+/* openEuler 22.03 ships gcc 10.3 / libstdc++ 10, which does NOT provide
+ * <barrier> (added in libstdc++ 11). The aarch64 CPU topology code uses
+ * std::barrier<std::function<void()>> with a completion function in exactly
+ * one site (framework/device/cpu/topology_cpu.h, BarrierDeviceScheduler),
+ * calling only arrive_and_wait(), arrive_and_drop(), the (count, comp) ctor,
+ * and delete. This minimal polyfill implements exactly that surface on top of
+ * mutex + condition_variable, invoking the completion function at each phase
+ * boundary. On gcc 12+ (openEuler 24.03) __cpp_lib_barrier is defined and the
+ * native <barrier> is used — zero behaviour change. */
+#ifndef __cpp_lib_barrier
+#  include <condition_variable>
+#  include <cstddef>
+#  include <functional>
+#  include <mutex>
+
+namespace std {
+
+template <typename CompletionFunction = decltype([]() {})>
+class barrier
+{
+public:
+    barrier(ptrdiff_t count, CompletionFunction completion = CompletionFunction())
+        : count_(count), total_(count), completion_(std::move(completion)), phase_(0)
+    {
+    }
+
+    // arrive_and_wait: decrement count; if it hits 0, run the completion fn,
+    // reset count, advance phase, and wake all waiters; otherwise wait for
+    // the current phase to advance.
+    void arrive_and_wait()
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        auto my_phase = phase_;
+        if (--count_ == 0) {
+            ++phase_;
+            count_ = total_;
+            if (completion_)
+                completion_();
+            cv_.notify_all();
+        } else {
+            cv_.wait(lock, [this, my_phase] { return phase_ != my_phase; });
+        }
+    }
+
+    // arrive_and_drop: remove one permanent participant (the caller will not
+    // wait at this barrier again). Used by BarrierDeviceScheduler when a
+    // worker leaves the group.
+    void arrive_and_drop()
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        --total_;
+        if (--count_ == 0) {
+            ++phase_;
+            count_ = total_;
+            if (completion_)
+                completion_();
+            cv_.notify_all();
+        }
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    ptrdiff_t count_;
+    ptrdiff_t total_;
+    CompletionFunction completion_;
+    unsigned long long phase_;
+};
+
+} // namespace std
+#endif /* __cpp_lib_barrier */
+
+/* ------------------------------------------------------------------ */
 /* std::span (C++20, <span>)                                          */
 /* ------------------------------------------------------------------ */
 #ifndef __cpp_lib_span
