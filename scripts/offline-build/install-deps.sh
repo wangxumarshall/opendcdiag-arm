@@ -106,6 +106,13 @@ echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 拓扑排序后分批安
 EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|'
 EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|fuse3|'
 EXCLUDE_RE+='glibc-static-[0-9]|'
+# gmp runtime (NOT gmp-devel/gmp-c++): the tree's gmp may be a newer build
+# (e.g. -4) than the container base image's gmp (e.g. -3 on 22.03). The
+# tree's gmp-devel is built against the BASE version and Requires
+# "gmp = <base-build>" exactly. Upgrading gmp -3 -> -4 breaks that match and
+# makes gmp-devel uninstallable (→ gmp.h missing → arithmetic_arm fails).
+# Keep the base image's gmp; gmp-devel/-c++ (kept) match it exactly.
+EXCLUDE_RE+='gmp-[0-9]|'
 EXCLUDE_RE+='systemd-[0-9]|systemd-libs-[0-9]|systemd-udev-[0-9]|'
 EXCLUDE_RE+='setup-[0-9]|filesystem-[0-9]|basesystem-[0-9]|shadow-[0-9]|shadow-utils-[0-9]|pam-[0-9]|'
 EXCLUDE_RE+='crypto-policies-[0-9]|openEuler-release-[0-9]|openEuler-gpg-keys-[0-9]|openEuler-repos-[0-9])'
