@@ -24,6 +24,12 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # MMU/TLB/PTW SDC stress — the coverage-weakest unit (MMU 20%). Adds
+        # page-color aliasing (one physical page, many VAs), dual-TLB-lookup
+        # cross-page and cross-cache-line split accesses, and a large-ASID
+        # pressure sweep, none of which mmu_stress_arm exercises. Built only
+        # on aarch64.
+        'mmu_split_tlb_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
