@@ -1,9 +1,3 @@
-[submodule "third-part/rpms-20.03"]
-	path = third-part/rpms-20.03
-	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm-20.03.git
-[submodule "third-part/rpms-22.03"]
-	path = third-part/rpms-22.03
-	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm-22.03.git
-[submodule "third-part/rpms-24.03"]
-	path = third-part/rpms-24.03
+[submodule "third-part/rpms"]
+	path = third-part/rpms
 	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm.git
