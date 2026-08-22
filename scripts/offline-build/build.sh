@@ -47,6 +47,8 @@ echo "    测试数: $N"
 [ "$N" -gt 100 ] || { echo "错误: 测试数异常偏少 ($N), 检查 isal/zlib/zstd 是否装上" >&2; exit 1; }
 
 echo "==> 功能验证: zstd19 单线程"
-"$BIN" -e zstd19 -t 2000 -n 1 2>&1 | grep -iE "exit|result" | head -3
+# Tolerate grep|head returning non-zero under pipefail (head closes the pipe
+# early, SIGPIPE); the test's own exit status is reflected in the "exit:" line.
+"$BIN" -e zstd19 -t 2000 -n 1 2>&1 | grep -iE "exit|result" | head -3 || true
 
 echo "==> 完成。二进制: $BIN"
