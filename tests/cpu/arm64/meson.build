@@ -24,6 +24,12 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # Instruction-Fetch Unit SDC stress — coverage-weak unit (IFU 66%).
+        # JIT-generated data-dependent indirect-branch (br) dispatch table
+        # with a high-Hamming target permutation and padded blocks, to
+        # torture the branch predictor / BTB / instruction-cache path that no
+        # existing test targets. Built only on aarch64.
+        'ifu_branch_target_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
