@@ -96,6 +96,12 @@ cd /src
 
 echo "--- 运行验证 ---"
 echo -n "list-tests 行数: "; /src/builddir/opendcdiag --list-tests 2>/dev/null | wc -l
+# zstd19 + a regression test. grep may return 1 (no match) — tolerate it so
+# the container script does not exit non-zero under set -e and break the
+# outer verify-all-versions.sh loop.
+set +e
 /src/builddir/opendcdiag -e zstd19 -t 2000 -n 1 2>&1 | grep -iE "exit|result" | head -3
+/src/builddir/opendcdiag -e fma -t 2000 -n 1 2>&1 | grep -iE "exit|result" | head -1
+set -e
 echo "--- $MY_VER 完成 ---"
 ' 2>&1

@@ -7,7 +7,7 @@
 #
 # Usage: ./verify-all-versions.sh [pattern]
 #   pattern  optional grep -E pattern to filter versions (e.g. '24.03' )
-set -euo pipefail
+set -uo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 
 REPO="$PWD"
@@ -46,12 +46,10 @@ for entry in "${ALL[@]}"; do
         printf "%-16s | %-10s | %-6s | %-8s | %-10s | %s\n" "$tag" "-" "-" "-" "-" "image not loaded"
         continue
     fi
-    # Run the build+test; capture full log, tolerate failure.
-    if "$REPO/scripts/offline-build/docker-build-test.sh" "$tag" "$series" > "$log" 2>&1; then
-        rc=0
-    else
-        rc=$?
-    fi
+    # Run the build+test; capture full log, tolerate failure (one bad version
+    # must not abort the whole sweep).
+    "$REPO/scripts/offline-build/docker-build-test.sh" "$tag" "$series" > "$log" 2>&1
+    rc=$?
     # Extract status from log
     deps=$(grep -cE "安装完成" "$log" 2>/dev/null | head -1); [ "$deps" = "" ] && deps="?"
     if grep -q "完成。二进制" "$log" 2>/dev/null; then build="OK"; else build="FAIL"; fi
