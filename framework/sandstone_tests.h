@@ -17,7 +17,9 @@
 #include <algorithm>
 #include <iterator>
 #include <map>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 
 extern "C" {
 #endif

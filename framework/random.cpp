@@ -10,7 +10,9 @@
 #include <memory>
 #include <new>
 #include <random>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <sstream>
 
 #include <assert.h>

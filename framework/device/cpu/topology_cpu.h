@@ -22,7 +22,9 @@
 #endif
 #include <functional>
 #include <mutex>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 
 using EnabledDevices = LogicalProcessorSet;
 

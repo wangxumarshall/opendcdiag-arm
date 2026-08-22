@@ -8,7 +8,9 @@
 #include "sandstone_p.h"
 
 #include <string>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <vector>
 #include <boost/algorithm/string.hpp>
 

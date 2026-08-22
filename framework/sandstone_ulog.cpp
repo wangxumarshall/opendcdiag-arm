@@ -6,7 +6,9 @@
 #include "sandstone_p.h"
 #include "sandstone_utils.h"
 
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <string>
 
 #include <errno.h>

@@ -34,7 +34,15 @@
 #ifndef OPENDCDIAG_OPENEULER_COMPAT_H
 #define OPENDCDIAG_OPENEULER_COMPAT_H
 
-#include <version>
+// <version> provides the __cpp_lib_* feature-test macros (libstdc++ 10+).
+// gcc 7 (openEuler 20.03) does not ship it — on such toolchains the macros
+// are simply absent and the polyfills below activate. Include it only when
+// available so the header is usable on gcc 7 too.
+#ifdef __has_include
+#  if __has_include(<version>)
+#    include <version>
+#  endif
+#endif
 
 /* ------------------------------------------------------------------ */
 /* std::to_underlying (C++23, <utility>)                              */
@@ -53,6 +61,30 @@ to_underlying(E e) noexcept
 }
 } // namespace std
 #endif /* __cpp_lib_to_underlying */
+
+/* ------------------------------------------------------------------ */
+/* C++20 concepts / requires (language feature)                       */
+/* ------------------------------------------------------------------ */
+/* openEuler 20.03 ships gcc 7.3, which predates C++20 concepts entirely
+ * (no `concept` keyword, no `requires`-clause/expression). The code uses
+ * concepts in a handful of places. Because concept syntax and enable_if
+ * syntax are structurally different, the call sites use the macros below,
+ * which expand to native concepts on C++20+ and to enable_if/SFINAE on C++17.
+ * On gcc 10+ (22.03) and gcc 12+ (24.03), __cpp_concepts is defined and the
+ * native concept syntax is used — no behaviour change. */
+#ifndef __cpp_concepts
+#  include <type_traits>
+// Detection traits for the requires-expression at sandstone_p.h:492, which
+// checks whether a callable l can be invoked as l(test_thread_data*, int, int).
+// On C++20 this is `requires { l(a,b,c); }`; on C++17 we use void_t detection.
+namespace sandstone_detail {
+template <typename, typename = void> struct is_callable3 : std::false_type {};
+template <typename F, typename A, typename B, typename C>
+struct is_callable3<F(A, B, C),
+        decltype(void(std::declval<F>()(std::declval<A>(), std::declval<B>(), std::declval<C>())))>
+    : std::true_type {};
+} // namespace sandstone_detail
+#endif /* __cpp_concepts */
 
 /* ------------------------------------------------------------------ */
 /* std::string::contains / std::string_view::contains (C++23)         */

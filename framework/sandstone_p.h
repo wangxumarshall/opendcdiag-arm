@@ -20,7 +20,9 @@
 #include <limits.h>
 
 #ifdef __cplusplus
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <vector>
 
 #include "device/device_topology.h"
@@ -489,7 +491,14 @@ template <typename Lambda> static void for_each_test_thread(Lambda &&l, int max_
             int thread = is_main_process ? main_thread->thread_range.starting_thread + i : i;
             assert(thread < sApp->thread_count);
 
-            if constexpr (requires { l(sApp->test_thread_data(0), 0, 0); }) {
+            if constexpr (
+#ifdef __cpp_concepts
+                requires { l(sApp->test_thread_data(0), 0, 0); }
+#else
+                sandstone_detail::is_callable3<decltype(l)(
+                    decltype(sApp->test_thread_data(0)), int, int)>::value
+#endif
+            ) {
                 int device = is_main_process ? main_thread->device_range.starting_device + i : i;
                 assert(device < sApp->device_count);
 

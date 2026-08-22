@@ -39,7 +39,13 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <span>
+// <span> is a C++20 header (libstdc++ 10+). gcc 7 (openEuler 20.03) lacks it
+// entirely; openeuler_compat.h (included above) provides a std::span polyfill
+// when __cpp_lib_span is undefined, so only #include the system <span> when
+// the toolchain actually has it.
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 using std::atomic_int;
 extern "C" {
 #else
@@ -670,8 +676,13 @@ constexpr inline test_flags operator|(test_flag f1, test_flag f2)
     return test_flags(unsigned(f1) | unsigned(f2));
 }
 
+#ifdef __cpp_concepts
 template <typename Callback> void install_failure_callback(Callback cb)
     requires std::is_invocable_v<Callback>
+#else
+template <typename Callback, typename = std::enable_if_t<std::is_invocable_v<Callback>>>
+void install_failure_callback(Callback cb)
+#endif
 {
     using Stateless = void (*)();
     if constexpr (std::is_constructible_v<Stateless, Callback>) {
@@ -690,10 +701,12 @@ template <typename Callback> void install_failure_callback(Callback cb)
 
 namespace SandstoneMemcmpOrFail {
 using namespace SandstoneDataDetails;
+#ifdef __cpp_concepts
 template <typename Callback> concept FormatterFunction =
         std::is_invocable_r_v<std::string, Callback>
         || std::is_invocable_r_v<std::string, Callback, ptrdiff_t>
         || std::is_null_pointer_v<Callback>;
+#endif
 
 using FormatterCallback = std::string (*)(const void *token1, void *token2, ptrdiff_t idx);
 [[noreturn, gnu::cold]] void
@@ -709,7 +722,15 @@ bool test_formatter(std::function<std::string (ptrdiff_t)> cb, size_t max);
 /// callback @p formatter will be called with the index of where in the array
 /// the mismatch was detected and is supposed to return a string with
 /// information to include in the logs.
+#ifdef __cpp_concepts
 template <ValidDataType T, FormatterFunction Fn>
+#else
+template <typename T, typename Fn,
+          typename = std::enable_if_t<TypeToDataType<T>::IsValid
+              && (std::is_invocable_r_v<std::string, Fn>
+                  || std::is_invocable_r_v<std::string, Fn, ptrdiff_t>
+                  || std::is_null_pointer_v<Fn>)>>
+#endif
 static inline void memcmp_or_fail(const T *actual, const T *expected, size_t count, Fn formatter)
 {
     DataType type = TypeToDataType<T>::Type;
@@ -740,7 +761,12 @@ static inline void memcmp_or_fail(const T *actual, const T *expected, size_t cou
     __builtin_unreachable();
 }
 
+#ifdef __cpp_concepts
 template <ValidDataType T> static inline void
+#else
+template <typename T, typename = std::enable_if_t<TypeToDataType<T>::IsValid>>
+static inline void
+#endif
 memcmp_or_fail(const T *actual, const T *expected, size_t count)
 {
     return memcmp_or_fail(actual, expected, count, nullptr);

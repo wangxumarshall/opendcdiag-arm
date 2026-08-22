@@ -15,7 +15,9 @@
 #include <format>
 #include <iterator>
 #include <limits>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <string_view>
 #include <utility>
 

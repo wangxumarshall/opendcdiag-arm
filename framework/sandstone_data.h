@@ -102,7 +102,13 @@ struct Float128
 #endif // __FLT128_MAX__
 
 #ifdef __cplusplus
+// <concepts> is a C++20 header (libstdc++ 10+). gcc 7 (openEuler 20.03) lacks
+// it entirely. We include it only when concepts are available; the code's
+// concept definitions below are correspondingly gated.
+#ifdef __cpp_concepts
 #include <concepts>
+#endif
+#include "openeuler_compat.h"
 
 
 namespace SandstoneDataDetails {
@@ -180,7 +186,9 @@ template<> struct TypeToDataType<__float128> : TypeToDataType_helper<Float128Dat
 template<> struct TypeToDataType<fp16_t> : TypeToDataType_helper<Float16Data> {};
 #endif
 
+#ifdef __cpp_concepts
 template <typename T> concept ValidDataType = TypeToDataType<T>::IsValid;
+#endif
 
 static constexpr size_t type_real_size(DataType type)
 {

@@ -18,7 +18,9 @@
 
 #include <initializer_list>
 #include <limits>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <type_traits>
 
 #include <sys/types.h>

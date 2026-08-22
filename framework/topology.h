@@ -13,7 +13,9 @@
 #include <bit>
 #include <memory>
 #include <limits>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 #include <string>
 #include <utility>
 #include <variant>

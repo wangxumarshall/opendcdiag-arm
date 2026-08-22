@@ -14,7 +14,9 @@
 
 #include <functional>
 #include <string>
-#include <span>
+#ifdef __cpp_lib_span
+#  include <span>
+#endif
 
 // Whether only the YAML logger is compiled in. This includes the NO_LOGGING
 // case, which is disabled via dead-code elimination in logging.cpp.
