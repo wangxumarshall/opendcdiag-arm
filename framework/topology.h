@@ -9,6 +9,7 @@
 #include <sandstone_config.h>
 #include "test_data.h"
 
+#include "openeuler_compat.h"
 #include <bit>
 #include <memory>
 #include <limits>

@@ -30,6 +30,7 @@
 #include "test_knobs.h"
 
 #ifdef __cplusplus
+#include "openeuler_compat.h"
 #include <atomic>
 #include <functional>
 #include <memory>

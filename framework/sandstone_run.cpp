@@ -229,7 +229,7 @@ static ptrdiff_t memcmp_offset(const uint8_t *d1, const uint8_t *d2, size_t size
 bool _memcmp_or_fail_check_fmt(const char *fmt, ...)
 {
     std::string msg = va_start_and_stdprintf(fmt);
-    if (msg.contains('\n'))
+    if (SANDSTONE_STR_CONTAINS(msg, '\n'))
         log_yaml(SANDSTONE_LOG_DEBUG, ("memcmp_or_fail: " + msg).c_str());
     return true;
 }

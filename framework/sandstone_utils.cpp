@@ -322,7 +322,7 @@ struct FormatSimpleValue
             }
         } else {
             r = stdprintf("%.17g", v);
-            if (!r.contains('.'))
+            if (!SANDSTONE_STR_CONTAINS(r, '.'))
                 r += ".0";
             pad_string();
             r += stdprintf(" # %a", v);
@@ -338,7 +338,7 @@ struct FormatSimpleValue
         }
         if (v.ends_with('\n'))
             v.remove_suffix(1);
-        if (v.contains('\n')) {
+        if (SANDSTONE_STR_CONTAINS(v, '\n')) {
             escape_multi_line(append_to, indent, v);
         } else {
             append_to += '\'';
