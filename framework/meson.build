@@ -94,7 +94,7 @@ premain_files = []
 # file is available before anything else.
 subdir(devicedeps_dir)
 
-if meson.current_source_dir() == join_paths(meson.project_source_root(), 'framework')
+if meson.current_source_dir() == join_paths(meson.source_root(), 'framework')
     configure_file(
         input: [
             'scripts/make-gitid.pl',
@@ -125,7 +125,7 @@ generated_files += custom_target(
         python,
         files('scripts/generate_test_list.py'),
         '@OUTPUT@',
-        meson.project_source_root(),
+        meson.source_root(),
         builtin_test_list_inputs,
     ],
 )

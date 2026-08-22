@@ -1,14 +1,23 @@
 # Copyright 2022 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
+# C++ standard compatibility level. The default C++23 build (gnu++23) works on
+# modern toolchains (openEuler 24.03 / gcc 12+). Older openEuler LTS releases
+# ship older toolchains that cannot compile gnu++23, so this option auto-selects
+# the highest standard the detected gcc supports, and the framework's
+# framework/openeuler_compat.h header polyfills the few C++23 facilities the
+# aarch64 CPU build path uses (std::to_underlying) when the toolchain lacks them.
+# 'auto' probes the gcc major version: >=12 -> c++23, >=10 -> c++20, else c++17.
+option('cxx_compat', type : 'combo',
+       choices : ['auto', 'c++23', 'c++20', 'c++17'], value : 'auto',
+    description : 'C++ standard level. "auto" picks the highest the toolchain supports (gnu++23 on gcc12+, gnu++20 on gcc10, gnu++17 below); framework/openeuler_compat.h polyfills missing C++23 facilities.')
+
 option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'no_output'], value : 'yaml',
     description : 'Set build-time default logging format to "no_output", "yaml" (default), or "tap".')
 option('march_base', type : 'string', value : '',
     description : 'Build framework with this base optimization -march= value (default: "haswell").')
 option('framework_options', type : 'array', value : [],
-    description : 'Configuration options for the framework. ' +
-    'Possible options: restricted-cmdline, no-child-debug{,-crashes,-hangs}, no-child-backtrace, ' +
-    'no-test-names, no-ulog, allow-stdout-from-tests')
+    description : 'Configuration options for the framework. Possible options: restricted-cmdline, no-child-debug{,-crashes,-hangs}, no-child-backtrace, no-test-names, no-ulog, allow-stdout-from-tests')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
     description : 'Link preference for dependencies: dynamic (default) or static')
 option('docdir', type : 'string', value : 'doc/dcdiag',

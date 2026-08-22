@@ -9,9 +9,17 @@ project(
         'b_ndebug=if-release',
         'b_staticpic=true',
         'c_std=gnu17',
-        'cpp_std=gnu++23',
+        # cpp_std is NOT set here; it is chosen dynamically below from the
+        # cxx_compat option + detected gcc version (gnu++23 on gcc12+, gnu++20
+        # on gcc10, gnu++17 below), then applied via add_project_arguments.
     ],
-    meson_version : '>=1.3',
+    # Lowered from >=1.3 to >=0.54 so the same build files work on older
+    # openEuler LTS toolchains (20.03 ships meson 0.54.3, 22.03 ships 0.59.4).
+    # The only >=0.56 call used (meson.project_source_root) is replaced by
+    # meson.source_root() below, which is valid on 0.54 through 1.x; no
+    # other 0.56+-only meson feature is used in the shared build files.
+    # openEuler 24.03 (meson 1.3.1) satisfies this trivially — no regression.
+    meson_version : '>=0.54',
 )
 
 cc = meson.get_compiler('c')
@@ -21,6 +29,80 @@ bash = find_program('bash')
 perl = find_program('perl')
 python = find_program('python3')
 shell = find_program('sh')
+
+# ---- openEuler version + C++ standard detection ------------------------------
+# The default CPU build path uses a handful of C++23 facilities (notably
+# std::to_underlying). openEuler 24.03 (gcc 12.3) compiles gnu++23 natively;
+# 22.03 (gcc 10) tops out at gnu++20; 20.03 (gcc 7) tops out at gnu++17 and
+# lacks std::span entirely. Rather than force one std on everyone, detect the
+# host openEuler major version and the gcc major version and pick the highest
+# standard the toolchain supports. The framework/openeuler_compat.h header then
+# polyfills the missing pieces under a guard macro, so the 24.03 build is
+# byte-identical to before (no polyfills active, gnu++23 unchanged).
+openeuler_detect = run_command(
+    find_program('sh'),
+    files('scripts/detect-os.sh'),
+    check: false,
+)
+oe_fields = openeuler_detect.stdout().strip().split(' ')
+oe_id = oe_fields.length() > 0 ? oe_fields[0] : ''
+oe_version_id = oe_fields.length() > 1 ? oe_fields[1] : ''
+oe_major_int_str = oe_fields.length() > 2 ? oe_fields[2] : '0'
+oe_major_int = oe_major_int_str.to_int()
+oe_sp = oe_fields.length() > 3 ? oe_fields[3] : ''
+is_openeuler = oe_id == 'openeuler'
+
+# gcc major version (e.g. "12.3.1" -> 12); used for the auto cpp_std pick.
+cpp_ver_full = cpp.version()
+cpp_ver_parts = cpp_ver_full.split('.')
+cpp_major = cpp_ver_parts.length() > 0 ? cpp_ver_parts[0].to_int() : 0
+
+cpp_compat_opt = get_option('cxx_compat')
+if cpp_compat_opt == 'auto'
+    if cpp_major >= 12
+        cpp_std_resolved = 'gnu++23'
+    elif cpp_major >= 10
+        cpp_std_resolved = 'gnu++20'
+    else
+        cpp_std_resolved = 'gnu++17'
+    endif
+elif cpp_compat_opt == 'c++23'
+    cpp_std_resolved = 'gnu++23'
+elif cpp_compat_opt == 'c++20'
+    cpp_std_resolved = 'gnu++20'
+else
+    cpp_std_resolved = 'gnu++17'
+endif
+
+# Apply the resolved std via -std on the command line. We deliberately do not
+# set cpp_std in project(default_options:) so meson does not warn about the
+# manual -std flag; the std is chosen dynamically from the detected gcc version.
+add_project_arguments('-std=' + cpp_std_resolved, language: 'cpp')
+
+# Numeric compat level consumed by framework/openeuler_compat.h:
+#   23 -> native std::to_underlying / std::span available
+#   20 -> std::span native, to_underlying polyfilled (gcc 10, gnu++20)
+#   17 -> both polyfilled (gcc 7, gnu++17, no <span>)
+if cpp_std_resolved == 'gnu++23'
+    sandstone_cpp_compat = 23
+elif cpp_std_resolved == 'gnu++20'
+    sandstone_cpp_compat = 20
+else
+    sandstone_cpp_compat = 17
+endif
+
+add_project_arguments('-DSANDSTONE_CPP_COMPAT=@0@'.format(sandstone_cpp_compat),
+                      language: ['c', 'cpp'])
+if is_openeuler
+    add_project_arguments('-DSANDSTONE_OPENEULER_MAJOR=@0@'.format(oe_major_int),
+                          '-DSANDSTONE_OPENEULER_SP="@0@"'.format(oe_sp),
+                          language: ['c', 'cpp'])
+endif
+
+summary('openEuler:', is_openeuler ? (oe_version_id + ' (' + oe_sp + ')') : 'no')
+summary('gcc major:', cpp_major)
+summary('C++ std (resolved):', cpp_std_resolved, section: 'Toolchain')
+summary('C++ compat level:', sandstone_cpp_compat, section: 'Toolchain')
 
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
     warning(
