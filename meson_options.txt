@@ -16,6 +16,8 @@ option('logging_format', type : 'combo', choices : ['yaml', 'tap', 'no_output'],
     description : 'Set build-time default logging format to "no_output", "yaml" (default), or "tap".')
 option('march_base', type : 'string', value : '',
     description : 'Build framework with this base optimization -march= value (default: "haswell").')
+option('acl_incdir', type : 'string', value : '',
+    description : 'Arm Compute Library headers include dir (provides arm_compute/). Empty -> ACL_INCDIR env var or the historical host path; ACL tests are skipped when the headers are absent (e.g. a clean openEuler container).')
 option('framework_options', type : 'array', value : [],
     description : 'Configuration options for the framework. Possible options: restricted-cmdline, no-child-debug{,-crashes,-hangs}, no-child-backtrace, no-test-names, no-ulog, allow-stdout-from-tests')
 option('dependency_link', type : 'combo', choices : ['dynamic', 'static'], value : 'dynamic',
