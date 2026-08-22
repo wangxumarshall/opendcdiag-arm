@@ -84,11 +84,30 @@ echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 拓扑排序后分批安
 # 用 ^name-[0-9] 匹配 "名字后紧跟版本号", 这样能精确剔除 glibc 本体而保留
 # glibc-devel / glibc-headers (gcc 需要 glibc-devel)。旧版用 name$ 锚点对文件名
 # 永远不命中 (文件名带版本后缀), 实际一个受保护包都没排除掉。
+# ---- A 类: 静态排除受保护/无关系统包 ----
+# download-deps.sh 用 `dnf download --resolve --alldeps` 拉全整棵依赖树,
+# 其中混入 bootloader/固件/系统核心等受 dnf protected_packages 保护的包
+# (grub2-*, shim, mokutil, efivar, efibootmgr, dracut, os-prober, kpartx,
+# device-mapper, fuse, systemd, pam, setup, filesystem, ...)
+# 它们版本若有差异 dnf 会视升级为删除受保护包而拒绝。OpenDCDiag 不依赖它们。
+#
+# **关键**: glibc 本体与 glibc-common **不排除** —— 容器基础镜像的 glibc
+# 构建号往往较旧 (如 -84), 而 RPM 树里的 glibc-devel 是较新构建 (如 -119),
+# glibc-devel 精确依赖 glibc = <同构建号>。若 glibc 不升级, glibc-devel 装
+# 不上 → gcc (依赖 glibc-devel) 被 --skip-broken 跳过 → 构建失败。容器是
+# 一次性的, 升级 glibc 84->119 无风险, 且让 glibc-devel 精确匹配。glibc-static
+# (静态库, OpenDCDiag 不用) 仍排除。
+#
+# 匹配对象是 RPM 文件名 (形如 "name-version-release.arch.rpm"), 而非 %{NAME}。
+# 故前缀类包 (grub2/shim/...) 用 ^name 前缀匹配; 精确名包 (glibc/systemd/...)
+# 用 ^name-[0-9] 匹配 "名字后紧跟版本号", 这样能精确剔除 glibc 本体而保留
+# glibc-devel / glibc-headers (gcc 需要 glibc-devel)。旧版用 name$ 锚点对文件名
+# 永远不命中 (文件名带版本后缀), 实际一个受保护包都没排除掉。
 EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|'
 EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|fuse3|'
-EXCLUDE_RE+='glibc-[0-9]|glibc-common-[0-9]|glibc-static-[0-9]|'
+EXCLUDE_RE+='glibc-static-[0-9]|'
 EXCLUDE_RE+='systemd-[0-9]|systemd-libs-[0-9]|systemd-udev-[0-9]|'
-EXCLUDE_RE+='setup-[0-9]|filesystem-[0-9]|basesystem-[0-9]|shadow-[0-9]|pam-[0-9]|'
+EXCLUDE_RE+='setup-[0-9]|filesystem-[0-9]|basesystem-[0-9]|shadow-[0-9]|shadow-utils-[0-9]|pam-[0-9]|'
 EXCLUDE_RE+='crypto-policies-[0-9]|openEuler-release-[0-9]|openEuler-gpg-keys-[0-9]|openEuler-repos-[0-9])'
 
 # ---- B 类: 跳过目标机已装同版本包 (减少安装量, 避免无谓重装) ----
@@ -229,7 +248,13 @@ done
 #   --allowerasing  允许替换容器基础镜像里已装的同名包 (版本略有差异时解冲突)
 #   --skip-broken   跳过实在装不上的个别包 (如 openssh 需 /sbin/nologin 但容器无)
 #   --nobest        不强求 best 候选, 装得上就装
-if ! $SUDO dnf install --disablerepo=* -y --allowerasing --skip-broken --nobest "${INSTALL_LIST[@]}"; then
+#   --setopt=protected_packages=  临时禁用 dnf 的受保护包列表。容器里升级 gcc
+#       工具链时, 链上某些包 (如 python3 升级) 会让 dnf 认为会移除 dnf/yum
+#       (受保护), 从而拒绝整个事务 (or 在 --skip-broken 下静默跳过 gcc)。
+#       容器是一次性的, 移除/替换 dnf 无后续风险, 故禁用保护以让 gcc 装上。
+#       真实物理机离线安装应去掉此选项 (保留保护)。
+if ! $SUDO dnf install --disablerepo=* -y --allowerasing --skip-broken --nobest \
+        --setopt=protected_packages= "${INSTALL_LIST[@]}"; then
     echo "" >&2
     echo "==> dnf 离线安装失败。常见原因:" >&2
     echo "    1) 版本降级冲突 (cannot install both X sp3 and sp4):" >&2

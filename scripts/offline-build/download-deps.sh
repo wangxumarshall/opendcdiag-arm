@@ -50,6 +50,7 @@ REQUIRED=(
     zstd-devel
     libatomic
     git
+    gmp-devel
 )
 # isal: 优先 EPOL 的 libisa-l-devel, 不可用则回退 everything 的 libisal-devel
 if dnf info libisa-l-devel >/dev/null 2>&1; then
