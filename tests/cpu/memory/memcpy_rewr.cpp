@@ -41,6 +41,7 @@
 #include <cstring>
 #include <atomic>
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 #include <pthread.h>
@@ -248,23 +249,37 @@ struct memcpy_rewr_state {
  * framework spawns up to 192 worker threads each with an 8 MiB stack, and
  * the ~12 MiB of __thread storage per thread overflows it (SIGSEGV on
  * first touch). We therefore keep them per-thread but heap-allocate them
- * lazily through a thread_local pointer, which preserves the original
+ * lazily through thread_local RAII wrappers, which preserves the original
  * "each worker has its own private m_tester/m_tmp" semantics without
  * touching the stack.
+ *
+ * The RAII wrappers matter: the framework joins every worker thread in
+ * run_threads_in_parallel() *before* it calls test_cleanup(), so each
+ * thread's thread_local destructors run (and free the buffers) before the
+ * child process exits. With a plain raw pointer this ~12 MiB/worker was
+ * leaked for the lifetime of the (forked) child - reclaimed only by the OS
+ * on exit - which is a real leak under --fork-mode no-fork and inflates
+ * RSS when the test is iterated. The destructor frees on thread exit.
  */
-static thread_local struct mem_info_s *m_tester_p = nullptr;
-static thread_local unsigned char *m_tmp_p = nullptr;
+struct mem_info_deleter {
+    void operator()(struct mem_info_s *p) const noexcept { free(p); }
+};
+struct byte_deleter {
+    void operator()(unsigned char *p) const noexcept { free(p); }
+};
+static thread_local std::unique_ptr<struct mem_info_s, mem_info_deleter> m_tester_p;
+static thread_local std::unique_ptr<unsigned char, byte_deleter> m_tmp_p;
 
 /* lazily allocate this thread's buffers; idempotent. */
 static bool ensure_thread_buffers(void)
 {
     if (!m_tester_p) {
-        m_tester_p = static_cast<mem_info_s *>(malloc(sizeof(mem_info_s)));
+        m_tester_p.reset(static_cast<mem_info_s *>(malloc(sizeof(mem_info_s))));
         if (!m_tester_p)
             return false;
     }
     if (!m_tmp_p) {
-        m_tmp_p = static_cast<unsigned char *>(malloc(c_size));
+        m_tmp_p.reset(static_cast<unsigned char *>(malloc(c_size)));
         if (!m_tmp_p)
             return false;
     }
@@ -277,7 +292,7 @@ static void func_data_make(memcpy_rewr_state *st, int size)
 {
     if (!m_tmp_p)
         return;
-    memcpy(st->gl_tester.b1, m_tmp_p, size);
+    memcpy(st->gl_tester.b1, m_tmp_p.get(), size);
 }
 
 static void func_memtest(memcpy_rewr_state *st, int size)
@@ -471,7 +486,7 @@ static int do_iot_schedule(memcpy_rewr_state *st, iot_conf_t *conf,
                            call_stub_t *stub, int pri)
 {
     for (int i =  0; i < st->g_size; i++)
-        m_tmp_p[i] = i ^ myget_cycles();
+        m_tmp_p.get()[i] = i ^ myget_cycles();
     pthread_mutex_lock(&conf->mutex);
     {
         __iot_enqueue(st, conf, stub, pri);
