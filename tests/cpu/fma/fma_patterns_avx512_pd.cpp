@@ -1,8 +1,6 @@
 #include <sandstone.h>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <atomic>
 #include <random>
 #include <cmath>
 
@@ -22,7 +20,6 @@ static int fma_patterns_avx512_pd_run(struct test *test, int cpu) {
     (void)cpu;
     std::mt19937 rng(std::random_device{}());
     std::uniform_real_distribution<double> dist(-1e6, 1e6);
-    static std::atomic<uint64_t> iter{0};
 
     do {
         // 生成随机向量 a, b, c（对齐到 16 字节即可满足 NEON）
@@ -65,21 +62,15 @@ static int fma_patterns_avx512_pd_run(struct test *test, int cpu) {
         vst1q_f64(hw_result + 4,  vd2);
         vst1q_f64(hw_result + 6,  vd3);
 
-        // ---- 软件参考：使用标准库 fma（正确舍入） ----
+        // ---- 软件参考：使用标准库 fma（单次舍入）。NEON vfmaq_f64 也是
+        // 单次舍入 IEEE-754 FMA，因此对于有限操作数硬件与软件结果按位一致；
+        // SDC 检测使用按位精确 memcmp，而非容差比较（容差会让 1 位 SDC 漏检）。
         for (int i = 0; i < VECTOR_SIZE; ++i) {
             sw_ref[i] = fma(a[i], b[i], c[i]);
         }
 
-        // ---- 比较硬件结果与参考（允许 1e-15 相对误差或 1e-12 绝对误差） ----
-        bool data_ok = true;
-        for (int i = 0; i < VECTOR_SIZE; ++i) {
-            double diff = fabs(hw_result[i] - sw_ref[i]);
-            double tol = 1e-15 * fmax(fabs(hw_result[i]), fabs(sw_ref[i]));
-            if (diff > tol && diff > 1e-12) {
-                data_ok = false;
-                break;
-            }
-        }
+        // ---- 按位精确比较硬件结果与参考（替换原先 1e-15/1e-12 容差比较） ----
+        bool data_ok = (memcmp(hw_result, sw_ref, sizeof(sw_ref)) == 0);
 
         // ---- 一致性测试：存储硬件结果到内存再加载比较 ----
         double store_buf[VECTOR_SIZE];
@@ -88,28 +79,7 @@ static int fma_patterns_avx512_pd_run(struct test *test, int cpu) {
         memcpy(reload_buf, store_buf, sizeof(store_buf));
         bool consistent = (memcmp(reload_buf, hw_result, sizeof(reload_buf)) == 0);
 
-        bool passed = data_ok && consistent;
-
-        uint64_t iteration = iter.fetch_add(1, std::memory_order_relaxed);
-        const char *color = passed ? "\033[32m" : "\033[31m";
-        const char *result_str = passed ? "PASS" : "FAIL";
-
-        // ---- 输出日志（与 x86 版本完全一致） ----
-        fprintf(stderr, "fma_patterns_avx512_pd: Iter %lu, a[0..3]=%.6e %.6e %.6e %.6e\n",
-                iteration, a[0], a[1], a[2], a[3]);
-        fprintf(stderr, "                    b[0..3]=%.6e %.6e %.6e %.6e\n",
-                b[0], b[1], b[2], b[3]);
-        fprintf(stderr, "                    c[0..3]=%.6e %.6e %.6e %.6e\n",
-                c[0], c[1], c[2], c[3]);
-        fprintf(stderr, "  hw_result[0..3]=%.6e %.6e %.6e %.6e\n",
-                hw_result[0], hw_result[1], hw_result[2], hw_result[3]);
-        fprintf(stderr, "  sw_ref[0..3]=%.6e %.6e %.6e %.6e\n",
-                sw_ref[0], sw_ref[1], sw_ref[2], sw_ref[3]);
-        fprintf(stderr, "  data_ok=%d, consistent=%d, result=%s%s\033[0m\n",
-                data_ok, consistent, color, result_str);
-        fflush(stderr);
-
-        if (!passed) {
+        if (!(data_ok && consistent)) {
             report_fail_msg("fma_patterns_avx512_pd: FMA result mismatch or consistency failure");
             return EXIT_FAILURE;
         }
