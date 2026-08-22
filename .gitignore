@@ -8,3 +8,6 @@
 # ctags
 tags
 /.vscode/
+# Claude Code local artifacts (session state, agent memory)
+/.claude/
+/memory/
