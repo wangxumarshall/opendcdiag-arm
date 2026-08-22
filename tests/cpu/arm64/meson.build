@@ -30,6 +30,12 @@ if host_machine.cpu_family() == 'aarch64'
         # 2x-L2 thrash sweep — the coherency/snoop/split surfaces that
         # memcpy_l2_cache_size never touches. Built only on aarch64.
         'l2c_cross_cache_line_arm.cpp',
+        # MMU/TLB/PTW SDC stress — the coverage-weakest unit (MMU 20%). Adds
+        # page-color aliasing (one physical page, many VAs), dual-TLB-lookup
+        # cross-page and cross-cache-line split accesses, and a large-ASID
+        # pressure sweep, none of which mmu_stress_arm exercises. Built only
+        # on aarch64.
+        'mmu_split_tlb_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
