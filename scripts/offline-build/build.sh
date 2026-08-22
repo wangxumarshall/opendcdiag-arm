@@ -29,7 +29,13 @@ echo "==> 构建目录: $BUILD"
 # aarch64 路径: eigen5 仓库自带, 无需系统 eigen3, 也无需 PKG_CONFIG_PATH.
 # 保留 PKG_CONFIG_PATH 仅为兼容 x86 路径(若在该分支上构建). 无害.
 echo "==> meson setup..."
-if [ ! -d "$BUILD" ]; then
+# Only --reconfigure an EXISTING valid meson build tree (one with a
+# meson-private/ dir or build.ninja). A bare directory (e.g. a podman named
+# volume that was auto-populated with only the source tree's .gitignore) is
+# NOT a valid build tree — meson setup --reconfigure fails on it with
+# "Directory does not contain a valid build tree". Re-create from scratch.
+if [ ! -d "$BUILD/meson-private" ] && [ ! -f "$BUILD/build.ninja" ]; then
+    rm -rf "$BUILD"/* "$BUILD"/.[!.]* 2>/dev/null || true
     PKG_CONFIG_PATH="$SRC/third-party/eigen5" meson setup "$BUILD" --buildtype=release
 else
     PKG_CONFIG_PATH="$SRC/third-party/eigen5" meson setup --reconfigure "$BUILD" --buildtype=release
