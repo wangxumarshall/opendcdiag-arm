@@ -24,6 +24,13 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # LSU store-buffer/load-forwarding SDC stress — coverage-weak unit
+        # (LSU 54%). Same-size forward at widths 1/2/4/8/16B and offsets
+        # including the cache-line boundary, partial-store forwarding/merging,
+        # store-after-load hazard, 128B cross-line forward, and strided
+        # same-line forward — the forwarding datapath no existing memory test
+        # targets. Built only on aarch64.
+        'lsu_store_forward_arm.cpp',
         # L2 cache coherency/split-access SDC stress — coverage-weak unit
         # (L2C 40%). Adds cross-64B-line exclusive ldxr/stxr RMW, store-to-load
         # forwarding across the line boundary, dc-civac writeback probe, and a
