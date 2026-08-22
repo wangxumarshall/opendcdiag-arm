@@ -24,6 +24,14 @@ if host_machine.cpu_family() == 'aarch64'
         # burst/stall power-virus in the suite. Built only on aarch64.
         'power_virus_dit.cpp',
         'sdc_test.cpp',
+        # Integer Execution Unit SDC stress — coverage-weak unit (IEX 70%).
+        # Full IEX opcode combination (add/sub/and/or/xor/mul/shift/clz/rbit/
+        # rev) over high-Hamming operands with serial dependency, plus
+        # carry-flag dependent adcs/sbcs/csel chains run twice to detect
+        # non-deterministic flag-rename SDC — the opcode-mix and flag-rename
+        # surfaces operand_space_arm/adcx/mrn_ never cover. Built only on
+        # aarch64.
+        'iex_operand_combo_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
