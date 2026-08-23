@@ -22,7 +22,7 @@
 #   taskset -c 179 ./mrueig 3000 12345
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-EIG="${EIG:-$HOME/arm64-sdc-fuzzing/opendcdiag/third-part}"
+EIG="${EIG:-$HOME/arm64-sdc-fuzzing/opendcdiag/third-party}"
 
 # 1. compile Eigen machine-code object (C-ABI wrapper, -fno-exceptions -fno-rtti)
 g++ -O2 -std=gnu++17 -march=armv8.1-a+crc+crypto -I"$EIG" \

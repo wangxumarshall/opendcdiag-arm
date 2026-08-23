@@ -32,6 +32,37 @@ if host_machine.cpu_family() == 'aarch64'
         # surfaces operand_space_arm/adcx/mrn_ never cover. Built only on
         # aarch64.
         'iex_operand_combo_arm.cpp',
+        # Instruction-Fetch Unit SDC stress — coverage-weak unit (IFU 66%).
+        # JIT-generated data-dependent indirect-branch (br) dispatch table
+        # with a high-Hamming target permutation and padded blocks, to
+        # torture the branch predictor / BTB / instruction-cache path that no
+        # existing test targets. Built only on aarch64.
+        'ifu_branch_target_arm.cpp',
+        # Out-of-order execution SDC stress — coverage-weak unit (OoO 56%).
+        # Pointer-chasing dependency chain, carry-dependent mixed ALU+memory
+        # chain, RW-hazard interleave, and long dependent ALU chains to stress
+        # the scheduler/ROB/rename under serial dependencies — the replay/
+        # rename surface no existing test targets. Built only on aarch64.
+        'ooo_dep_chain_arm.cpp',
+        # LSU store-buffer/load-forwarding SDC stress — coverage-weak unit
+        # (LSU 54%). Same-size forward at widths 1/2/4/8/16B and offsets
+        # including the cache-line boundary, partial-store forwarding/merging,
+        # store-after-load hazard, 128B cross-line forward, and strided
+        # same-line forward — the forwarding datapath no existing memory test
+        # targets. Built only on aarch64.
+        'lsu_store_forward_arm.cpp',
+        # L2 cache coherency/split-access SDC stress — coverage-weak unit
+        # (L2C 40%). Adds cross-64B-line exclusive ldxr/stxr RMW, store-to-load
+        # forwarding across the line boundary, dc-civac writeback probe, and a
+        # 2x-L2 thrash sweep — the coherency/snoop/split surfaces that
+        # memcpy_l2_cache_size never touches. Built only on aarch64.
+        'l2c_cross_cache_line_arm.cpp',
+        # MMU/TLB/PTW SDC stress — the coverage-weakest unit (MMU 20%). Adds
+        # page-color aliasing (one physical page, many VAs), dual-TLB-lookup
+        # cross-page and cross-cache-line split accesses, and a large-ASID
+        # pressure sweep, none of which mmu_stress_arm exercises. Built only
+        # on aarch64.
+        'mmu_split_tlb_arm.cpp',
     )
 
     arm64_tests_lib = static_library(

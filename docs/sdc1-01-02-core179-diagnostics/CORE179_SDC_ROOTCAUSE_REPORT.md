@@ -43,7 +43,7 @@ OpenDCDiag 在 ARM64(aarch64)上完成构建并通过自测后,启动无限循�
 | L1 | D/I 各 64KB,4 路;L2 512KB;L3 24MB / package(24 核共享) |
 | OS | openEuler 24.03 SP3,kernel 6.6.0-145.3.23.154.aarch64 |
 | EDAC | ghes_edac,32 DIMM,APEI firmware-first;SBSA 硬件 watchdog(sbsa-gwdt,10s 超时) |
-| OpenDCDiag-arm | 自研构建,`--buildtype=debugoptimized -Dssl_link_type=dynamic`,bundled Eigen 5.0.1(`third-part/` vendored,非 submodule) |
+| OpenDCDiag-arm | 自研构建,`--buildtype=debugoptimized -Dssl_link_type=dynamic`,bundled Eigen 5.0.1(`third-party/` vendored,非 submodule) |
 
 诊断期间 `kernel.perf_event_paranoid` 调为 -1 以启用非特权系统级 per-core PMU 采样。
 
@@ -604,7 +604,7 @@ echo 0 > /sys/devices/system/cpu/cpu179/online   # 下线核 179(需 root)
 export PATH="$HOME/.local/bin:$PATH"
 export LD_LIBRARY_PATH="$HOME/rpmroot/sysroot/usr/lib64:$LD_LIBRARY_PATH"
 cd ~/arm64-sdc-fuzzing/opendcdiag   # 或本机 /home/sdc/sdc-fuzzing/opendcdiag
-EIG=$PWD/third-part
+EIG=$PWD/third-party
 DIAG=$PWD/docs/sdc1-01-02-core179-diagnostics
 
 # === ★推荐:libc-only MRU(一键构建)===
@@ -650,7 +650,7 @@ taskset -c 179 $DIAG/mrueig 3000 12345           # 历史预期:6-24/3000 fails
 
 ### 13.6 关联产物
 - OpenDCDiag ARM64 构建修复(PR #1,已合并到 main):`fix/opendcdiag-arm64-build-and-tests`;
-- Eigen 5.0.1 源码(vendored,main):`opendcdiag/third-part`;
+- Eigen 5.0.1 源码(vendored,main):`opendcdiag/third-party`;
 - 100 个 sdc_fuzz 复现用例:见 §17。
 
 ## 14. 研究方法学小结
