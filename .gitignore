@@ -3,6 +3,9 @@
 /opendcdiag-*.log
 /opendcdiag-*.yaml
 /total_log_output.yaml
+# forever-patrol loop artifacts (test loop run artifacts, not source)
+/run-all-forever.log
+/run-pid.txt
 # typical names for meson build directories
 /build*/
 # ctags
