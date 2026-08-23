@@ -37,6 +37,39 @@
 #include <cstddef>       // size_t
 #include <climits>       // CHAR_BIT
 #include <functional>     // std::function
+#include <pthread.h>      // pthread_cond_t / pthread_mutex_t / clockid_t
+#include <time.h>         // struct timespec
+
+// ---------------------------------------------------------------------------
+// pthread_cond_clockwait 兜底实现 (C++ <condition_variable> 依赖)
+// gcc-toolset-10 的 <condition_variable> 头调用 pthread_cond_clockwait
+// (glibc 2.30 引入)。20.03 SP4 的 glibc 2.28-129 回填了该符号(头+库都有),
+// 但 20.03 LTS/SP1/SP2/SP3 的 glibc 2.28-36/63/79/97 既未声明也无符号
+// → <condition_variable> 编译报 "declaration must be available" + 链接缺符号。
+// 本处在 glibc < 2.30 且未声明时提供一个 static inline 退化实现, 并在 #include
+// <condition_variable> 之前用宏重定向调用点(关键: 宏必须在 <condition_variable>
+// 被首次包含前定义, 否则头内的调用不会被重写)。
+//   退化语义: 忽略 clockid 参数, 直接用 pthread_cond_timedwait (默认 CLOCK_REALTIME)。
+// 对 OpenDCDiag 的 BarrierDeviceScheduler (std::barrier 底层 condition_variable) 足够。
+// glibc >= 2.30 或 SP4 的回填版本(头已声明) → __GLIBC_PREREQ(2,30) 为真, 本块不生效。
+// ---------------------------------------------------------------------------
+#if defined(__GLIBC__) && !__GLIBC_PREREQ(2, 30)
+__BEGIN_DECLS
+static inline int __attribute__((unused))
+__opendcdiag_pthread_cond_clockwait(pthread_cond_t *__restrict __cond,
+                                    pthread_mutex_t *__restrict __mutex,
+                                    clockid_t __clk, const struct timespec *__abstime)
+{
+    (void)__clk;  // 退化: 忽略 clockid, 用默认 CLOCK_REALTIME
+    return pthread_cond_timedwait(__cond, __mutex, __abstime);
+}
+__END_DECLS
+// 必须在 <condition_variable> 被包含前定义此宏, 才能重写头里的调用。
+#  ifndef pthread_cond_clockwait
+#    define pthread_cond_clockwait __opendcdiag_pthread_cond_clockwait
+#  endif
+#endif /* glibc < 2.30 */
+
 #include <mutex>          // std::mutex, lock_guard
 #include <condition_variable>
 #include <cstddef>        // ptrdiff_t / max_align_t
