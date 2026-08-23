@@ -675,7 +675,7 @@ bool TopologyDetector::detect_numa()
         cpulist.reserve(16);
     while (struct dirent *entry = readdir(dir)) {
         std::string_view name(entry->d_name);
-        if (!name.starts_with("node"))
+        if (!SANDSTONE_STR_STARTS_WITH(name, "node"))
             continue;
         name.remove_prefix(strlen("node"));
 
@@ -1505,7 +1505,7 @@ void apply_deviceset_param(const char *param)
                 if (cpu.cpu_number % 2 == desired_remainder)
                     apply_to_set(cpu);
             }
-        } else if (p.starts_with("type=")) {
+        } else if (SANDSTONE_STR_STARTS_WITH(p, "type=")) {
             NativeCoreType expected = [&]() {
                 std::string_view type = p;
                 type.remove_prefix(strlen("type="));

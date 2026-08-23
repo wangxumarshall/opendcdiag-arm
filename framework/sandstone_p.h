@@ -115,6 +115,7 @@ enum class LogLevelVerbosity : int8_t
 inline constexpr auto LOG_LEVEL_ERROR = LogLevelVerbosity::Error;
 inline constexpr auto LOG_LEVEL_QUIET = LogLevelVerbosity::Quiet;
 using LOG_LEVEL_VERBOSE = LogLevelVerbosity;
+#ifdef __cpp_impl_three_way_comparison
 inline auto operator<=>(LogLevelVerbosity a, LogLevelVerbosity b) noexcept
 {
     return std::to_underlying(a) <=> std::to_underlying(b);
@@ -127,6 +128,23 @@ inline auto operator==(LogLevelVerbosity a, int b) noexcept
 {
     return std::to_underlying(a) == b;
 }
+#else
+// C++17 fallback for operator<=> (gcc 7, openEuler 20.03). Define the
+// individual relational operators via to_underlying; == with int is already
+// covered. This provides the same comparison semantics without the <=> token.
+inline bool operator==(LogLevelVerbosity a, LogLevelVerbosity b) noexcept { return std::to_underlying(a) == std::to_underlying(b); }
+inline bool operator!=(LogLevelVerbosity a, LogLevelVerbosity b) noexcept { return std::to_underlying(a) != std::to_underlying(b); }
+inline bool operator<(LogLevelVerbosity a, LogLevelVerbosity b) noexcept  { return std::to_underlying(a) <  std::to_underlying(b); }
+inline bool operator>(LogLevelVerbosity a, LogLevelVerbosity b) noexcept  { return std::to_underlying(a) >  std::to_underlying(b); }
+inline bool operator<=(LogLevelVerbosity a, LogLevelVerbosity b) noexcept { return std::to_underlying(a) <= std::to_underlying(b); }
+inline bool operator>=(LogLevelVerbosity a, LogLevelVerbosity b) noexcept { return std::to_underlying(a) >= std::to_underlying(b); }
+inline bool operator==(LogLevelVerbosity a, int b) noexcept { return std::to_underlying(a) == b; }
+inline bool operator!=(LogLevelVerbosity a, int b) noexcept { return std::to_underlying(a) != b; }
+inline bool operator<(LogLevelVerbosity a, int b) noexcept  { return std::to_underlying(a) <  b; }
+inline bool operator>(LogLevelVerbosity a, int b) noexcept  { return std::to_underlying(a) >  b; }
+inline bool operator<=(LogLevelVerbosity a, int b) noexcept { return std::to_underlying(a) <= b; }
+inline bool operator>=(LogLevelVerbosity a, int b) noexcept { return std::to_underlying(a) >= b; }
+#endif
 
 /*
 * Returns a vector with device-specific tests that should be

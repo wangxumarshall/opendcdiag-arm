@@ -83,7 +83,7 @@ public:
     {
         for (const auto &e : instance().test_knobs) {
             size_t dot_pos = e.key.find('.');
-            bool is_for_test = dot_pos == test_id.size() && e.key.starts_with(test_id);
+            bool is_for_test = dot_pos == test_id.size() && SANDSTONE_STR_STARTS_WITH(e.key, test_id);
             if (dot_pos == std::string::npos || is_for_test) {
                 argv.push_back(e.key.c_str());
                 argv.push_back(e.value.c_str());

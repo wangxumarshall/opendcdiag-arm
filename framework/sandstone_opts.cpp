@@ -1205,7 +1205,7 @@ struct ProgramOptionsParser {
     bool validate_thread_ratio(std::string str_value, ThreadRatio& thread_ratio, const int device_count) {
         bool isValid = false;
         char *end = nullptr;
-        if (str_value.starts_with('-')) {
+        if (SANDSTONE_STR_STARTS_WITH(str_value, '-')) {
             // delta mode: -N threads relative to device count
             // Not using ParseIntArgument so we have a single error usage message
             long val = strtol(str_value.c_str(), &end, 10);

@@ -19,6 +19,19 @@
 #endif
 
 #ifdef __cplusplus
+#include "openeuler_compat.h"
+// C++20 (P0960) allows `constexpr T() = default;` and uninitialized locals in
+// constexpr functions for trivial/union types; gcc 7 (openEuler 20.03, gnu++17)
+// does not. None of the Floats.h static_asserts depend on the default ctor's
+// constexpr-ness (they all use the parameterized ctors), so on C++17 we drop
+// `constexpr` from the defaulted default ctors. The feature-test macro for
+// the relevant constexpr extensions is __cpp_constexpr_dynamic_alloc (C++20);
+// on gcc 12 (24.03) it is defined and the native `constexpr` is kept.
+#  if defined(__cpp_constexpr_dynamic_alloc) && __cpp_constexpr_dynamic_alloc >= 201907
+#    define SANDSTONE_CONSTEXPR_DFLT constexpr
+#  else
+#    define SANDSTONE_CONSTEXPR_DFLT
+#  endif
 #define STATIC_INLINE static inline constexpr
 #else
 #define STATIC_INLINE static inline
@@ -190,7 +203,7 @@ struct BFloat8
     };
 
 #ifdef __cplusplus
-    constexpr inline BFloat8() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline BFloat8() = default;
     inline BFloat8(float f);
 
     constexpr inline BFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
@@ -285,7 +298,7 @@ struct HFloat8
     };
 
 #ifdef __cplusplus
-    constexpr inline HFloat8() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline HFloat8() = default;
     inline HFloat8(float f);
 
     constexpr inline HFloat8(uint8_t s, uint8_t e, uint8_t m): mantissa(m), exponent(e), sign(s) { }
@@ -378,7 +391,7 @@ struct Float16
     };
 
 #ifdef __cplusplus
-    constexpr inline Float16() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline Float16() = default;
     inline Float16(float f);
 
     constexpr inline Float16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
@@ -515,7 +528,7 @@ struct BFloat16
     };
 
 #ifdef __cplusplus
-    constexpr inline BFloat16() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline BFloat16() = default;
     inline BFloat16(float f);
     constexpr inline BFloat16(uint16_t s, uint16_t e, uint16_t m): mantissa(m), exponent(e), sign(s) { }
 
@@ -656,7 +669,7 @@ struct Float32 {
     };
 
 #ifdef __cplusplus
-    constexpr inline Float32() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline Float32() = default;
     constexpr inline Float32(float f) : as_float(f) { }
     constexpr inline Float32(uint32_t s, uint32_t e, uint32_t m): mantissa(m), exponent(e), sign(s) { }
 
@@ -721,7 +734,7 @@ struct Float64 {
     };
 
 #ifdef __cplusplus
-    constexpr inline Float64() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline Float64() = default;
     constexpr inline Float64(double f) : as_float(f) { }
     constexpr inline Float64(uint64_t s, uint64_t e, uint64_t m): mantissa(m), exponent(e), sign(s) { }
 
@@ -791,7 +804,7 @@ struct Float80 {
     };
 
 #ifdef __cplusplus
-    constexpr inline Float80() = default;
+    SANDSTONE_CONSTEXPR_DFLT inline Float80() = default;
     constexpr inline Float80(long double f) : as_float(f) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t j, uint64_t m): mantissa(m), jbit(j), exponent(e), sign(s) { }
     constexpr inline Float80(uint64_t s, uint64_t e, uint64_t m): mantissa(m), jbit(e == 0 ? 0 : 1), exponent(e), sign(s) { }
@@ -906,8 +919,8 @@ STATIC_INLINE Float80 new_float80(uint64_t sign, uint64_t exponent, uint64_t jbi
  * @{
  */
 
-STATIC_INLINE bool float_is_negative(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_negative(tmp); }
-STATIC_INLINE bool double_is_negative(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_negative(tmp); }
+STATIC_INLINE bool float_is_negative(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_negative(tmp); }
+STATIC_INLINE bool double_is_negative(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_negative(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -937,8 +950,8 @@ constexpr inline bool IS_NEGATIVE(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_zero(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_zero(tmp); }
-STATIC_INLINE bool double_is_zero(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_zero(tmp); }
+STATIC_INLINE bool float_is_zero(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_zero(tmp); }
+STATIC_INLINE bool double_is_zero(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_zero(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -968,8 +981,8 @@ constexpr inline bool IS_ZERO(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_denormal(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_denormal(tmp); }
-STATIC_INLINE bool double_is_denormal(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_denormal(tmp); }
+STATIC_INLINE bool float_is_denormal(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_denormal(tmp); }
+STATIC_INLINE bool double_is_denormal(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_denormal(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -999,8 +1012,8 @@ constexpr inline bool IS_DENORMAL(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_finite(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_finite(tmp); }
-STATIC_INLINE bool double_is_finite(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_finite(tmp); }
+STATIC_INLINE bool float_is_finite(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_finite(tmp); }
+STATIC_INLINE bool double_is_finite(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_finite(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1069,8 +1082,8 @@ constexpr inline bool IS_OVERFLOW(BFloat8 v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_inf(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_inf(tmp); }
-STATIC_INLINE bool double_is_inf(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_inf(tmp); }
+STATIC_INLINE bool float_is_inf(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_inf(tmp); }
+STATIC_INLINE bool double_is_inf(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_inf(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1099,8 +1112,8 @@ constexpr inline bool IS_INF(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_nan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_nan(tmp); }
-STATIC_INLINE bool double_is_nan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_nan(tmp); }
+STATIC_INLINE bool float_is_nan(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_nan(tmp); }
+STATIC_INLINE bool double_is_nan(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_nan(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1129,8 +1142,8 @@ constexpr inline bool IS_NAN(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_snan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_snan(tmp); }
-STATIC_INLINE bool double_is_snan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_snan(tmp); }
+STATIC_INLINE bool float_is_snan(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_snan(tmp); }
+STATIC_INLINE bool double_is_snan(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_snan(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1159,8 +1172,8 @@ constexpr inline bool IS_SNAN(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_qnan(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_qnan(tmp); }
-STATIC_INLINE bool double_is_qnan(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_qnan(tmp); }
+STATIC_INLINE bool float_is_qnan(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_qnan(tmp); }
+STATIC_INLINE bool double_is_qnan(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_qnan(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1189,8 +1202,8 @@ constexpr inline bool IS_QNAN(double v) {
     )(v)
 #endif
 
-STATIC_INLINE bool float_is_max(float f) { Float32 tmp; tmp.as_float = f; return Float32_is_max(tmp); }
-STATIC_INLINE bool double_is_max(double d) { Float64 tmp; tmp.as_float = d; return Float64_is_max(tmp); }
+STATIC_INLINE bool float_is_max(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_is_max(tmp); }
+STATIC_INLINE bool double_is_max(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_is_max(tmp); }
 
 #ifdef __cplusplus
 template<typename T>
@@ -1219,8 +1232,8 @@ constexpr inline bool IS_MAX(double v) {
     )(v)
 #endif
 
-STATIC_INLINE uint32_t float_get_nan_payload(float f) { Float32 tmp; tmp.as_float = f; return Float32_get_nan_payload(tmp); }
-STATIC_INLINE uint64_t double_get_nan_payload(double d) { Float64 tmp; tmp.as_float = d; return Float64_get_nan_payload(tmp); }
+STATIC_INLINE uint32_t float_get_nan_payload(float f) { Float32 tmp = {0}; tmp.as_float = f; return Float32_get_nan_payload(tmp); }
+STATIC_INLINE uint64_t double_get_nan_payload(double d) { Float64 tmp = {0}; tmp.as_float = d; return Float64_get_nan_payload(tmp); }
 
 #ifdef __cplusplus
 template<typename T>

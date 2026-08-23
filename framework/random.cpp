@@ -509,7 +509,7 @@ static EngineType engineFromName(std::string_view argument)
 {
     for (EngineType type : engine_types) {
         std::string_view name = engineNameFromType(type);
-        if (!argument.starts_with(name))
+        if (!SANDSTONE_STR_STARTS_WITH(argument, name))
             continue;
         if (argument.size() != name.size() && argument[name.size()] != ':')
             continue;

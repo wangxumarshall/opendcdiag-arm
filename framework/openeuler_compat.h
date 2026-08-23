@@ -63,15 +63,30 @@ to_underlying(E e) noexcept
 #endif /* __cpp_lib_to_underlying */
 
 /* ------------------------------------------------------------------ */
+/* std::to_address (C++20, <memory>)                                   */
+/* ------------------------------------------------------------------ */
+/* gcc 7 / libstdc++ 7 lacks std::to_address. It is trivially &*it for
+ * iterators (and identity for raw pointers). The two call sites pass
+ * vector iterators. */
+#ifndef __cpp_lib_to_address
+#  include <memory>
+namespace std {
+template <typename T> constexpr T *to_address(T *p) noexcept { return p; }
+template <typename It> constexpr auto to_address(const It &it) noexcept
+    -> decltype(&*it) { return &*it; }
+} // namespace std
+#endif /* __cpp_lib_to_address */
+
+/* ------------------------------------------------------------------ */
 /* std::bit ops (C++20, <bit>)                                         */
 /* ------------------------------------------------------------------ */
 /* openEuler 20.03's gcc 7 / libstdc++ 7 does not ship <bit> at all. The
  * topology code uses std::popcount, std::countr_zero, std::bit_floor,
  * std::rotl, std::bit_width — all trivially expressible via gcc builtins.
- * On gcc 10+ (22.03/24.03) __cpp_lib_bit_ops is defined and the native <bit>
- * is used (include sites gate on __cpp_lib_bit_ops); on gcc 7 these inline
+ * On gcc 10+ (22.03/24.03) __cpp_lib_int_pow2 is defined and the native <bit>
+ * is used (include sites gate on __cpp_lib_int_pow2); on gcc 7 these inline
  * polyfills in namespace std activate. */
-#ifndef __cpp_lib_bit_ops
+#ifndef __cpp_lib_int_pow2
 #  include <cstddef>
 namespace std {
 constexpr int popcount(unsigned long long x) noexcept { return __builtin_popcountll(x); }
@@ -87,10 +102,15 @@ template <typename T> constexpr T bit_floor(T x) noexcept { return x ? (T(1) << 
 template <typename T> constexpr T rotl(T x, int s) noexcept {
     constexpr int N = (int)(sizeof(T) * 8);
     int r = s % N; if (r < 0) r += N;
-    return r == 0 ? x : (T)((unsigned T)(x) << r | (unsigned T)(x) >> (N - r));
+    if (r == 0) return x;
+    // Use the unsigned counterpart of T to avoid UB on shift; make_unsigned is
+    // C++11 so available on gcc 7.
+    using UT = typename std::make_unsigned<T>::type;
+    UT ux = static_cast<UT>(x);
+    return static_cast<T>((ux << r) | (ux >> (N - r)));
 }
 } // namespace std
-#endif /* __cpp_lib_bit_ops */
+#endif /* __cpp_lib_int_pow2 */
 
 /* ------------------------------------------------------------------ */
 /* C++20 concepts / requires (language feature)                       */
@@ -137,6 +157,16 @@ struct is_callable3<F(A, B, C),
 #  endif
 #endif
 
+/* std::string/string_view::starts_with (C++20). gcc 7/10 libstdc++ lacks it
+ * (present in libstdc++ 12). Same free-macro approach as contains. */
+#ifndef SANDSTONE_STR_STARTS_WITH
+#  if SANDSTONE_CPP_COMPAT >= 20
+#    define SANDSTONE_STR_STARTS_WITH(str, x) (str).starts_with(x)
+#  else
+#    define SANDSTONE_STR_STARTS_WITH(str, x) ((str).rfind((x), 0) == 0)
+#  endif
+#endif
+
 /* ------------------------------------------------------------------ */
 /* std::barrier (C++20, <barrier>)                                    */
 /* ------------------------------------------------------------------ */
@@ -157,7 +187,11 @@ struct is_callable3<F(A, B, C),
 
 namespace std {
 
-template <typename CompletionFunction = decltype([]() {})>
+namespace sandstone_detail {
+struct noop_completion { void operator()() const {} };
+} // namespace sandstone_detail
+
+template <typename CompletionFunction = sandstone_detail::noop_completion>
 class barrier
 {
 public:

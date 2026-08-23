@@ -54,7 +54,7 @@ public:
 
         ASSERT_EQ(got_strs.size(), expected.size());
         for (auto i = 0; i < got_strs.size(); i++) {
-            if (find_unittests_keyword && expected[i].starts_with("unittests:")) {
+            if (find_unittests_keyword && SANDSTONE_STR_STARTS_WITH(expected[i], "unittests:")) {
                 check_eq_substr(got_strs[i], expected[i]);
             } else {
                 EXPECT_EQ(got_strs[i], expected[i]);
