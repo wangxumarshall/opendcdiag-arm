@@ -1,3 +1,9 @@
-[submodule "third-part/rpms"]
-	path = third-part/rpms
-	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm.git
+[submodule "third-party/rpms/openEuler-20.03"]
+	path = third-party/rpms/openEuler-20.03
+	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm-20.03.git
+[submodule "third-party/rpms/openEuler-22.03"]
+	path = third-party/rpms/openEuler-22.03
+	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm-22.03.git
+[submodule "third-party/rpms/openEuler-24.03"]
+	path = third-party/rpms/openEuler-24.03
+	url = git@github.com:wangxumarshall/opendcdiag-arm-rpm-24.03.git
