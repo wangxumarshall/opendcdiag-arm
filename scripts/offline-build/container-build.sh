@@ -74,8 +74,8 @@ if [ -n "$FINDUTILS_RPM" ] && ! command -v find >/dev/null 2>&1; then
 fi
 command -v find >/dev/null 2>&1 || { echo "ERROR: find 仍不可用" >&2; exit 1; }
 
-# 创建构建工作目录 (容器内可写)
-mkdir -p "$BUILD" "$OUT"
+# 创建构建工作目录 (容器内可写) + /var/tmp (最小镜像缺, rpm %trigger 脚本需要)
+mkdir -p "$BUILD" "$OUT" /var/tmp /tmp
 
 # 容器是最小化 KIWI 镜像, 系统包(util-linux/libuuid 等)版本与 RPM 树来源子版本号
 # 略有差异(如 -31 vs -39), dnf 的精确版本依赖会触发 "protected dnf" 死结。
@@ -85,7 +85,43 @@ EXCLUDE_RE='grub2|shim|mokutil|efivar|dracut|kpartx|fuse|glibc$|glibc-common|gli
 KEEP=$(find "$RPMDIR" -maxdepth 1 -name '*.rpm' | grep -ivE "$EXCLUDE_RE")
 echo "  强装 $(echo "$KEEP" | wc -l) 个 RPM (--nodeps --force)..."
 rpm -Uvh --nodeps --force $KEEP >/tmp/rpm-install.log 2>&1 || true
+
+# 大批量 --nodeps --force 会因文件冲突静默跳过部分关键包(如 glibc-devel 提供
+# crt1.o, binutils 提供 ld)。显式重装这几个关键包, 保证 toolset gcc 能链接。
+# 注: 某些包(如 glibc-headers)在 20.03 不存在, ls 无匹配会非零退出 → 用 || true
+# 兜底, 否则 set -e 会中断脚本。
+for mustpkg in glibc-devel glibc-headers binutils gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ gcc-toolset-10-libstdc++-devel gcc-toolset-10-libgcc; do
+    f=$(ls "$RPMDIR"/${mustpkg}-*.rpm 2>/dev/null | head -1) || true
+    [ -n "$f" ] && rpm -Uvh --nodeps --force "$f" >/dev/null 2>&1 || true
+done
 echo "  安装完成; gcc 版本: $(gcc --version 2>/dev/null | head -1 || echo MISSING)"
+
+# 20.03 + 22.03 的最小镜像缺 ld 符号链接: binutils 装了 ld.bfd 但
+# /usr/bin/ld → /etc/alternatives/ld 的 alternatives 链未建(--nodeps 跳了
+# %post 脚本依赖的 chkconfig/alternatives)。手动建直链, 让 collect2 找到 ld。
+if [ ! -e /usr/bin/ld ] && [ -e /usr/bin/ld.bfd ]; then
+    ln -sf /usr/bin/ld.bfd /usr/bin/ld
+    echo "  建 /usr/bin/ld → ld.bfd 符号链接"
+fi
+
+# 20.03: gcc-10 以 SCL gcc-toolset-10 形式安装(在 /opt/openEuler/gcc-toolset-10/root/)。
+# 系统默认 gcc 是 7.3(无 C++20/23)。激活 toolset: 把其 bin 加 PATH, 设 CC/CXX,
+# 设 lib/include 搜索路径(LDFLAGS/CPPFLAGS/-isystem), 让 meson 用 gcc-10 而非 gcc-7。
+TOOLSET_ROOT="/opt/openEuler/gcc-toolset-10/root"
+if [ -n "${OPENEULER_MACRO:-}" ] && [ -d "$TOOLSET_ROOT/usr/bin" ]; then
+    TS_BIN="$TOOLSET_ROOT/usr/bin"
+    # toolset 的 gcc/g++ 二进制名为 gcc/g++(非 gcc-10); 加 PATH 优先于系统 gcc-7
+    export PATH="$TS_BIN:$PATH"
+    export CC="$TS_BIN/gcc"
+    export CXX="$TS_BIN/g++"
+    # toolset 的 libstdc++ 头/库在 root/usr/include 与 root/usr/lib64
+    TS_LIB="$TOOLSET_ROOT/usr/lib64"
+    export LDFLAGS="-L$TS_LIB -Wl,-rpath,$TS_LIB ${LDFLAGS:-}"
+    # 让 meson 的 cpp.check_header / dependency 能找到 toolset 的 boost/gmp 等
+    export PKG_CONFIG_PATH="$TOOLSET_ROOT/usr/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
+    echo "  激活 gcc-toolset-10: $(gcc --version 2>/dev/null | head -1)"
+    echo "  CC=$CC CXX=$CXX"
+fi
 
 echo "===== [2/5] 工具链自检 ====="
 for cmd in gcc g++ meson ninja perl python3 pkg-config ar; do
@@ -104,6 +140,15 @@ if ! perl -0pi -e "s/meson_version\s*:\s*'>=1\.3'/meson_version : '>=0.59'/" "$S
     echo "warn: perl sed meson_version failed" >&2
 fi
 grep -n "meson_version" "$SRCW/meson.build" | head -1
+
+# 20.03 binutils-2.34 不认 `udf` 助记符 (selftest.cpp:960 的 asm volatile("udf #0x1234"))
+# — 旧 as 报 "unknown mnemonic udf"。把 udf #0x1234 替换为等价的 .inst 0x00001234
+# (同编码, 旧 as 支持 .inst 伪指令)。仅 20.03, host 源码不动。22.03 的 binutils
+# 较新, 认 udf, 不动。
+if [ "${OPENEULER_MACRO:-}" = "OPENEULER_20_03" ]; then
+    perl -pi -e 's/"udf #0x1234"/".inst 0x00001234"/' "$SRCW/framework/selftest.cpp" 2>/dev/null || true
+    echo "  sed-patch udf→.inst 完成 (20.03)"
+fi
 
 # 22.03/20.03 (GCC 10) 缺 std::string/string_view::contains (C++23, P1679)。
 # 在容器副本上 patch 3 个调用点为 .find() 比较 (host 源码不动):
@@ -152,7 +197,8 @@ export CXXFLAGS="${CXXFLAGS_EXTRA} ${CXXFLAGS:-}"
 export CPPSTD="${CPPSTD:-gnu++23}"
 
 rm -rf "$BUILD/builddir"
-meson setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" ${EXTRA_MESON_ARGS:-}
+meson_setup() { ${MESON_BIN:-meson} "$@"; }
+meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" ${EXTRA_MESON_ARGS:-}
 
 echo "===== [4/5] ninja ====="
 ninja -C "$BUILD/builddir"
@@ -177,10 +223,13 @@ chmod +x "$SRC_ROOT/build-out/inner-build.sh"
 # 决定注入宏与 cpp_std
 # 注: 宏名用 OPENEULER_22_03 / OPENEULER_20_03 (点号→下划线),因 C 预处理器宏标识符
 # 不允许含点号 ('.')。语义与目标意图一致,仅隔离 22.03/20.03 适配,不触碰 24.03。
+# 20.03 特殊: 系统自带 meson 0.54 + python3.7 太旧(meson 0.59 RPM 也跑不动,需
+# importlib.metadata / py3.8+)。故 20.03 用 meson 0.59.4 源码包(build-out/meson-0.59.4)
+# 直接 python3 meson.py 运行(纯 Python,兼容 py3.7)。
 case "$SERIES" in
-    24.03) OEU_MACRO="";        CPPSTD="gnu++23" ;;
-    22.03) OEU_MACRO="OPENEULER_22_03"; CPPSTD="gnu++20" ;;
-    20.03) OEU_MACRO="OPENEULER_20_03"; CPPSTD="gnu++20" ;;
+    24.03) OEU_MACRO="";        CPPSTD="gnu++23"; MESON_BIN="meson" ;;
+    22.03) OEU_MACRO="OPENEULER_22_03"; CPPSTD="gnu++20"; MESON_BIN="meson" ;;
+    20.03) OEU_MACRO="OPENEULER_20_03"; CPPSTD="gnu++20"; MESON_BIN="python3 /meson-src/meson.py" ;;
     *) echo "bad series"; exit 1 ;;
 esac
 
@@ -198,15 +247,19 @@ ACL_HDR="/home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include"
 ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
 MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$SRC_ROOT/build-out/inner-build.sh:$INNER:ro")
+# 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)
+[ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/build-out/meson-0.59.4" ] && \
+    MOUNTS+=(-v "$SRC_ROOT/build-out/meson-0.59.4:/meson-src:ro")
 [ -d "$ACL_HDR" ] && MOUNTS+=(-v "$ACL_HDR:$ACL_HDR:ro")
 [ -d "$ACL_LIB" ] && MOUNTS+=(-v "$ACL_LIB/libarm_compute.so:$ACL_LIB/libarm_compute.so:ro" -v "$ACL_LIB/libarm_compute_graph.so:$ACL_LIB/libarm_compute_graph.so:ro")
 [ -d "$CLANG_RT" ] && MOUNTS+=(-v "$CLANG_RT:$CLANG_RT:ro")
 
-timeout 600 podman run --rm --user=0 \
+timeout 1200 podman run --rm --user=0 \
     "${MOUNTS[@]}" \
     -e OPENEULER_MACRO="$OEU_MACRO" \
     -e CPPSTD="$CPPSTD" \
     -e EXTRA_MESON_ARGS="$EXTRA_MESON_STR" \
+    -e MESON_BIN="$MESON_BIN" \
     "$IMG" \
     bash "$INNER"
 
