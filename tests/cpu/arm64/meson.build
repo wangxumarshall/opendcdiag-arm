@@ -63,6 +63,14 @@ if host_machine.cpu_family() == 'aarch64'
         # pressure sweep, none of which mmu_stress_arm exercises. Built only
         # on aarch64.
         'mmu_split_tlb_arm.cpp',
+        # Floating-point/SIMD Unit byte-exact SDC stress (FSU 80% — highest
+        # weak unit, but with a real gap: fma.cpp compares with a 1e-6
+        # tolerance, so a 1-bit FSU SDC passes. This test is byte-exact
+        # throughout: FMA over the full IEEE-754 special-value table, cross-
+        # cache-line 128B NEON data path, single<->double widen/narrow, and
+        # a high-Hamming dependent FMA chain, all compared bit-exact against
+        # libm. Built only on aarch64.
+        'fsu_byteexact_arm.cpp',
     )
 
     arm64_tests_lib = static_library(
