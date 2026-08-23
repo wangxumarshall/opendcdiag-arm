@@ -22,6 +22,9 @@
 // 覆盖范围(经实测扫描 ARM64 CPU 构建路径):
 //   - std::to_underlying  (C++23, <utility>, GCC>=12)  ← 22.03/20.03 GCC10 缺
 //   - std::bit_floor/ceil (C++20, <bit>,    GCC>=12 完整) ← GCC10 <bit> 不完整
+//   - std::barrier        (C++20, <barrier>,GCC>=11 libstdc++) ← GCC10 缺头文件
+//     仅 framework/device/cpu/topology_cpu.h 的 BarrierDeviceScheduler 用,
+//     API 面: 构造(count, completion_fn) + arrive_and_wait + arrive_and_drop。
 //   注: std::span(GCC10 已支持)、operator<=>(GCC10 已支持)无需 polyfill。
 //   注: std::format 仅用于 x86_64 路径(#ifdef __x86_64__),ARM64 不编,无需 polyfill。
 #pragma once
@@ -33,6 +36,10 @@
 #include <type_traits>   // underlying_type_t
 #include <cstddef>       // size_t
 #include <climits>       // CHAR_BIT
+#include <functional>     // std::function
+#include <mutex>          // std::mutex, lock_guard
+#include <condition_variable>
+#include <cstddef>        // ptrdiff_t / max_align_t
 
 // ---------------------------------------------------------------------------
 // std::to_underlying  (C++23, P1682, __cpp_lib_to_underlying)
@@ -50,26 +57,80 @@ namespace std {
 
 // ---------------------------------------------------------------------------
 // std::bit_floor / std::bit_ceil  (C++20, <bit>, __cpp_lib_bit_ops)
-// GCC 10 的 <bit> 部分缺(bit_floor/ceil 在某些 patch 级缺失或不可靠);
-// 用 __builtin 等价实现,语义与标准一致(已编译期整数幂运算)。
-// 仅在库确实未提供时补;GCC12+ 的 <bit> 完整,本块不生效。
+// GCC 10 的 <bit> 已提供 bit_floor/ceil(实测可用),只是未定义 __cpp_lib_bit_ops
+// 特性宏。故这里不补 bit_floor/ceil —— 补了会与 libstdc++ 既有的重载冲突
+// (ambiguous overload)。GCC12+ 同样无需补。本段保留说明,不注入任何定义。
 // ---------------------------------------------------------------------------
-#if !defined(__cpp_lib_bit_ops)
+
+// ---------------------------------------------------------------------------
+// std::barrier  (C++20, <barrier>, __cpp_lib_barrier)
+// libstdc++ 11+ 才提供 <barrier>;GCC 10 缺头文件。
+// 本实现用 mutex + condition_variable 模拟阶段屏障(phase barrier):
+//   - 构造(count, completion_fn): count 个参与方,每阶段结束调 completion_fn
+//   - arrive_and_wait(): 计数 -1, 到 0 时触发 completion + 重置, 全部唤醒
+//   - arrive_and_drop(): 永久退出(count 永久 -1, 不等待)
+// 语义与 std::barrier<CompletionFunction> 在 OpenDCDiag 的用法上一致
+// (拓扑 reschedule 的成对/分组同步)。completion_fn 在阶段边界被恰好一次调用。
+// 仅当库未提供时补;GCC11+ 不生效。
+// ---------------------------------------------------------------------------
+#if !defined(__cpp_lib_barrier)
 namespace std {
-    template <typename _Tp>
-    constexpr _Tp bit_floor(_Tp __x) noexcept {
-        // __builtin_clz 对无符号;标准要求 x>0 行为,0 返回 0(与 libstdc++ 一致)。
-        return __x == 0 ? _Tp(0)
-                        : (_Tp(1) << (sizeof(_Tp) * CHAR_BIT - 1 - __builtin_clz(__x)));
+
+// 需要默认构造的 completion function 包装(与 std::barrier<Function> 的 Function 兼容)。
+// OpenDCDiag 用 std::function<void()>, 故 completion 包装存 std::function。
+template <typename _CompletionFunction = std::function<void()>>
+class barrier
+{
+public:
+    barrier(ptrdiff_t __count, _CompletionFunction __completion = _CompletionFunction())
+        : _M_expected(__count), _M_waiting(__count), _M_generation(0),
+          _M_completion(std::move(__completion)) {}
+
+    // arrive_and_wait: 到达并等待本阶段全部到达
+    void arrive_and_wait()
+    {
+        std::unique_lock<std::mutex> __lk(_M_mtx);
+        ptrdiff_t __gen = _M_generation;
+        if (--_M_waiting == 0) {
+            // 本阶段最后一个: 触发 completion, 重置计数, 唤醒所有等待者
+            if (_M_completion) _M_completion();
+            _M_waiting = _M_expected;
+            ++_M_generation;
+            _M_cond.notify_all();
+        } else {
+            _M_cond.wait(__lk, [this, __gen] { return __gen != _M_generation; });
+        }
     }
-    template <typename _Tp>
-    constexpr _Tp bit_ceil(_Tp __x) noexcept {
-        // 最小 2^k >= x;若 x 已是 2 的幂则返回 x。
-        if (__x <= 1) return _Tp(1);
-        return _Tp(1) << ((sizeof(_Tp) * CHAR_BIT - 1 - __builtin_clz(__x - 1)) + 1);
+
+    // arrive_and_drop: 永久退出(预期参与方 -1, 不等待)
+    void arrive_and_drop()
+    {
+        std::unique_lock<std::mutex> __lk(_M_mtx);
+        if (--_M_waiting == 0) {
+            if (_M_completion) _M_completion();
+            --_M_expected;                 // 下一阶段永久少一个
+            _M_waiting = _M_expected;
+            ++_M_generation;
+            _M_cond.notify_all();
+        } else {
+            --_M_expected;                 // 下一阶段少一个,本阶段继续等剩余
+        }
     }
+
+    barrier(const barrier&) = delete;
+    barrier& operator=(const barrier&) = delete;
+
+private:
+    std::mutex _M_mtx;
+    std::condition_variable _M_cond;
+    ptrdiff_t _M_expected;
+    ptrdiff_t _M_waiting;
+    ptrdiff_t _M_generation;
+    _CompletionFunction _M_completion;
+};
+
 } // namespace std
-#endif // !__cpp_lib_bit_ops
+#endif // !__cpp_lib_barrier
 
 #endif // (OPENEULER_22_03 || OPENEULER_20_03) && __cplusplus
 

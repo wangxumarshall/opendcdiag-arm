@@ -105,11 +105,44 @@ if ! perl -0pi -e "s/meson_version\s*:\s*'>=1\.3'/meson_version : '>=0.59'/" "$S
 fi
 grep -n "meson_version" "$SRCW/meson.build" | head -1
 
-# CXXFLAGS 注入 polyfill 头 + 版本宏 (只对 22.03/20.03;24.03 不注入)
+# 22.03/20.03 (GCC 10) 缺 std::string/string_view::contains (C++23, P1679)。
+# 在容器副本上 patch 3 个调用点为 .find() 比较 (host 源码不动):
+#   sandstone_utils.cpp:325  !r.contains('.')  → r.find('.') == std::string::npos
+#   sandstone_utils.cpp:341  v.contains('\n')   → v.find('\n') != std::string_view::npos
+#   sandstone_opts.cpp:786    std::string_view{elem}.contains(',') → .find(',')!=npos
+# 注: std::map::contains (C++20) GCC10 已支持, 不动; 仅 string/string_view::contains 缺。
+if [ -n "${OPENEULER_MACRO:-}" ]; then
+    perl -pi -e "s/if \(!r\.contains\('\\.'\)\)/if (r.find('.') == std::string::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
+    perl -pi -e "s/if \(v\.contains\('\\\\n'\)\)/if (v.find('\\\\n') != std::string_view::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
+    perl -pi -e "s/std::string_view\{elem\}\.contains\(','\)/(std::string_view{elem}.find(',') != std::string_view::npos)/" "$SRCW/framework/sandstone_opts.cpp" 2>/dev/null || true
+    echo "  sed-patch .contains()→.find() 完成"
+fi
+
+# ACL (Arm Compute Library) 头库版本不匹配: host 头是 ACL v22.11 (GCC12 libstdc++),
+# 22.03 原生库是 v20.02 (GCC10 libstdc++), ABI 不兼容, 且 fisttp_arm 链接失败
+# (undefined GLIBCXX_3.4.29/3.4.30)。在 22.03/20.03 容器副本上把 arithmetic_arm
+# 的 ACL 子集置空: acl_sources → [], acl_dep → declare_dependency() 空 (不链 -larm_compute),
+# 使 acl_tests_lib 静态库为空且不拉 ACL 库。2 个 ACL 测试 (acl_gemm 本就 EXIT_SKIP,
+# fisttp_arm 依赖 ACL) 从 22.03/20.03 构建里跳过; GMP/compiler-rt 子集保留。host 源码不动。
+if [ -n "${OPENEULER_MACRO:-}" ]; then
+    AMESON="$SRCW/tests/cpu/arithmetic_arm/meson.build"
+    perl -0pi -e "s/acl_sources = files\(\s*'acl_gemm\.cpp',\s*'fisttp_arm\.cpp',\s*\)/acl_sources = []/s" "$AMESON" 2>/dev/null || true
+    # 把 acl_dep 的 declare_dependency(...) 调用整体改成空 declare_dependency()
+    perl -0pi -e "s/acl_dep = declare_dependency\(\s*compile_args : \[.*?\],\s*link_args\s*: \[.*?\],\s*\)/acl_dep = declare_dependency()/s" "$AMESON" 2>/dev/null || true
+    echo "  sed-patch ACL 子集置空完成 (22.03/20.03 跳过 2 ACL 测试)"
+fi
+
+# CXXFLAGS 注入 polyfill 头 + 版本宏 + compat/ 系统头路径 (只对 22.03/20.03;24.03 不注入)
+# -isystem compat: 让源码里的 #include <barrier> 命中 compat/barrier shim(GCC10 无该头)
+# -include unistd.h: GCC10 头文件卫生比 GCC12 严, 部分 ARM64 测试源码
+#   (vector/kreg1.cpp/kreg2.cpp/insert_extract.cpp) 调 getpid() 但未 #include <unistd.h>;
+#   GCC12 靠传递包含放过, GCC10 报 "not declared"。用 -include unistd.h 无害兜底
+#   (不改动任何既有源码行, 仅在 22.03/20.03 构建注入)。
 POLYFILL_HDR="$SRCW/framework/compat/cpp23_polyfill.h"
+COMPAT_DIR="$SRCW/framework/compat"
 CXXFLAGS_EXTRA=""
 if [ -n "${OPENEULER_MACRO:-}" ] && [ -f "$POLYFILL_HDR" ]; then
-    CXXFLAGS_EXTRA="-D${OPENEULER_MACRO} -include $POLYFILL_HDR"
+    CXXFLAGS_EXTRA="-D${OPENEULER_MACRO} -include $POLYFILL_HDR -include unistd.h -isystem $COMPAT_DIR"
     echo "  注入: $CXXFLAGS_EXTRA"
 fi
 
