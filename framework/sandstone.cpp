@@ -202,8 +202,14 @@ static void preinit_tests()
         if (!group->group_init)
             return initfunc(nullptr);
 
-        auto it = std::ranges::find(group_replacement_cache, group->group_init,
-                                    [](const GroupReplacementEntry &e) { return e.group_init; });
+        auto it =
+#ifdef __cpp_lib_ranges
+            std::ranges::find(group_replacement_cache, group->group_init,
+                              [](const GroupReplacementEntry &e) { return e.group_init; });
+#else
+            std::find_if(group_replacement_cache.begin(), group_replacement_cache.end(),
+                         [&](const GroupReplacementEntry &e) { return e.group_init == group->group_init; });
+#endif
         if (it != group_replacement_cache.end())
             return it->replacement;
 
@@ -615,7 +621,9 @@ static int exec_mode_run(int argc, char **argv)
     rebuild_topology();
     sApp->user_thread_data.resize(sApp->thread_count);
 
-    test_set = new SandstoneTestSet({ .is_selftest = sApp->shmem->cfg.selftest, }, SandstoneTestSet::enable_all_tests);
+    struct test_set_cfg tcfg = {};
+    tcfg.is_selftest = sApp->shmem->cfg.selftest;
+    test_set = new SandstoneTestSet(tcfg, SandstoneTestSet::enable_all_tests);
     std::vector<struct test *> tests_to_run = test_set->lookup(argv[2]);
     if (tests_to_run.size() != 1) return EX_DATAERR;
 

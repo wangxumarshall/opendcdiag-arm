@@ -5,8 +5,11 @@
 
 #include "sandstone_chrono.h"
 #include "sandstone_p.h"
+#include "openeuler_compat.h"
 
+#ifdef __cpp_lib_to_chars
 #include <charconv>
+#endif
 #include <optional>
 
 using namespace std::chrono;

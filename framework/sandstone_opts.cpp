@@ -690,7 +690,7 @@ struct ProgramOptionsParser {
         // verbosity (before endpoints)
         auto it_verbosity = opts_map.find('v');
         auto verbosity = it_verbosity != opts_map.end() ? std::get<int>(it_verbosity->second) : -1;
-        if (opts_map.contains('q')) {
+        if (SANDSTONE_MAP_CONTAINS(opts_map, 'q')) {
             verbosity = 0;
         }
         opts.shmem_cfg.verbosity = LOG_LEVEL_VERBOSE(std::min(verbosity, int(LogLevelVerbosity::Max)));
@@ -700,12 +700,16 @@ struct ProgramOptionsParser {
             if (const int* value = std::get_if<int>(&it->second)) {
                 app_cfg->requested_quality = *value;
             } else {
+                #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
                 auto maybe_int = ParseIntArgument<>{
                         .name = "--quality",
                         .min = int(TEST_QUALITY_SKIP),
                         .max = int(TEST_QUALITY_PROD),
                         .range_mode = OutOfRangeMode::Saturate
                 }(std::get<const char*>(it->second));
+                #else
+                ParseIntArgument<> _pia; _pia.name = "--quality"; _pia.min = int(TEST_QUALITY_SKIP); _pia.max = int(TEST_QUALITY_PROD); _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(std::get<const char*>(it->second));
+                #endif
                 if (maybe_int) {
                     app_cfg->requested_quality = maybe_int.value();
                 } else {
@@ -719,7 +723,7 @@ struct ProgramOptionsParser {
         }
 
         // deviceset (before dump_cpu_info)
-        if (opts_map.contains(deviceset_option)) {
+        if (SANDSTONE_MAP_CONTAINS(opts_map, deviceset_option)) {
             opts.deviceset =
                 std::get<std::vector<const char*>>(
                         opts_map.at(deviceset_option)
@@ -728,7 +732,7 @@ struct ProgramOptionsParser {
 
         // selftest (before test listing)
 #ifndef NO_SELF_TESTS
-        if (opts_map.contains(selftest_option)) {
+        if (SANDSTONE_MAP_CONTAINS(opts_map, selftest_option)) {
             opts.shmem_cfg.selftest = true;
             opts.test_set_config.is_selftest = true;
         }
@@ -789,7 +793,11 @@ struct ProgramOptionsParser {
                 }
                 std::vector<std::string> tokens;
                 boost::split(tokens, elem, boost::is_any_of(","), boost::token_compress_on);
+#ifdef __cpp_lib_ranges
                 std::ranges::copy(tokens, std::back_inserter(res));
+#else
+                std::copy(tokens.begin(), tokens.end(), std::back_inserter(res));
+#endif
             }
             return res;
         };
@@ -860,22 +868,22 @@ struct ProgramOptionsParser {
         }
 
         // boolean flags
-        opts.fatal_errors = opts_map.contains('F');
+        opts.fatal_errors = SANDSTONE_MAP_CONTAINS(opts_map, 'F');
 
-        opts.test_set_config.ignore_unknown_tests = opts_map.contains(ignore_unknown_tests_option);
-        opts.test_set_config.randomize = opts_map.contains(test_list_randomize_option);
+        opts.test_set_config.ignore_unknown_tests = SANDSTONE_MAP_CONTAINS(opts_map, ignore_unknown_tests_option);
+        opts.test_set_config.randomize = SANDSTONE_MAP_CONTAINS(opts_map, test_list_randomize_option);
 
-        app_cfg->force_test_time = opts_map.contains(force_test_time_option);
-        app_cfg->fatal_skips = opts_map.contains(fatal_skips_option);
-        app_cfg->ignore_mce_errors = opts_map.contains(ignore_mce_errors_option);
-        app_cfg->ignore_os_errors = opts_map.contains(ignore_os_errors_option);
+        app_cfg->force_test_time = SANDSTONE_MAP_CONTAINS(opts_map, force_test_time_option);
+        app_cfg->fatal_skips = SANDSTONE_MAP_CONTAINS(opts_map, fatal_skips_option);
+        app_cfg->ignore_mce_errors = SANDSTONE_MAP_CONTAINS(opts_map, ignore_mce_errors_option);
+        app_cfg->ignore_os_errors = SANDSTONE_MAP_CONTAINS(opts_map, ignore_os_errors_option);
 #if SANDSTONE_FREQUENCY_MANAGER
-        app_cfg->vary_frequency_mode = opts_map.contains(vary_frequency);
-        app_cfg->vary_uncore_frequency_mode = opts_map.contains(vary_uncore_frequency);
+        app_cfg->vary_frequency_mode = SANDSTONE_MAP_CONTAINS(opts_map, vary_frequency);
+        app_cfg->vary_uncore_frequency_mode = SANDSTONE_MAP_CONTAINS(opts_map, vary_uncore_frequency);
 #endif
 
-        opts.shmem_cfg.use_strict_runtime = opts_map.contains(strict_runtime_option);
-        opts.shmem_cfg.ud_on_failure = opts_map.contains(ud_on_failure_option);
+        opts.shmem_cfg.use_strict_runtime = SANDSTONE_MAP_CONTAINS(opts_map, strict_runtime_option);
+        opts.shmem_cfg.ud_on_failure = SANDSTONE_MAP_CONTAINS(opts_map, ud_on_failure_option);
 
         // assign 1:1
         opts.seed = string_opt_for('s');
@@ -906,12 +914,20 @@ struct ProgramOptionsParser {
             }
         }
         if (auto value = string_opt_for('n')) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{
                     .name = "-n / --threads",
                     .min = 1,
                     .max = app_cfg->device_count,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            #else
+            ParseIntArgument<> _pia; _pia.name = "-n / --threads"; _pia.min = 1; _pia.max = app_cfg->device_count; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia; _pia.name = "-n / --threads"; _pia.min = 1; _pia.max = app_cfg->device_count; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 opts.device_count = maybe_int.value();
             } else {
@@ -969,10 +985,18 @@ struct ProgramOptionsParser {
                 opts.shmem_cfg.output_format = SandstoneApplication::OutputFormat::yaml;
                 auto value = std::get<const char*>(opts_map.at('Y'));
                 if (value) {
+                    #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+                    #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
                     auto maybe_int = ParseIntArgument<>{
                             .name = "-Y / --yaml",
                             .max = 160,     // arbitrary
                     }(value);
+                    #else
+                    ParseIntArgument<> _pia; _pia.name = "-Y / --yaml"; _pia.max = 160; auto maybe_int = _pia(value);
+                    #endif
+                    #else
+                    ParseIntArgument<> _pia; _pia.name = "-Y / --yaml"; _pia.max = 160; auto maybe_int = _pia(value);
+                    #endif
                     if (maybe_int) {
                         opts.shmem_cfg.output_yaml_indent = maybe_int.value();
                     } else {
@@ -1006,10 +1030,14 @@ struct ProgramOptionsParser {
             switch (std::get<int>(it->second)) {
             case max_cores_per_slice_option:
             {
+#if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
                 auto maybe_int = ParseIntArgument<>{
                     .name = "--max-cores-per-slice",
                     .min = -1,
                 }(std::get<const char*>(opts_map.at(max_cores_per_slice_option)));
+#else
+                ParseIntArgument<> _pia; _pia.name = "--max-cores-per-slice"; _pia.min = -1; auto maybe_int = _pia(std::get<const char*>(opts_map.at(max_cores_per_slice_option)));
+#endif
                 if (maybe_int) {
                     opts.max_cores_per_slice = maybe_int.value();
                 } else {
@@ -1024,11 +1052,19 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(retest_on_failure_option)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{
                     .name = "--retest-on-failure",
                     .max = SandstoneApplication::MaxRetestCount,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--retest-on-failure"; _pia.max = SandstoneApplication::MaxRetestCount; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--retest-on-failure"; _pia.max = SandstoneApplication::MaxRetestCount; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 app_cfg->retest_count = maybe_int.value();
             } else {
@@ -1039,6 +1075,8 @@ struct ProgramOptionsParser {
             if (std::string_view{value} == "disable") {
                 app_cfg->thermal_throttle_temp = -1;
             } else {
+                #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+                #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
                 auto maybe_int = ParseIntArgument<>{
                         .name = "--temperature-threshold",
                         .explanation = "value should be specified in thousandths of degrees Celsius "
@@ -1047,6 +1085,12 @@ struct ProgramOptionsParser {
                         .max = 160000,      // 160 C is WAAAY too high anyway
                         .range_mode = OutOfRangeMode::Saturate
                 }(value);
+                #else
+                ParseIntArgument<> _pia; _pia.name = "--temperature-threshold"; _pia.explanation = "value should be specified in thousandths of degrees Celsius "; _pia.max = 160000; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+                #endif
+                #else
+                ParseIntArgument<> _pia; _pia.name = "--temperature-threshold"; _pia.explanation = "value should be specified in thousandths of degrees Celsius "; _pia.max = 160000; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+                #endif
                 if (maybe_int) {
                     app_cfg->thermal_throttle_temp = maybe_int.value();
                 } else {
@@ -1054,14 +1098,22 @@ struct ProgramOptionsParser {
                 }
             }
         }
-        if (opts_map.contains(test_tests_option)) {
+        if (SANDSTONE_MAP_CONTAINS(opts_map, test_tests_option)) {
             opts.test_tests = true;
         }
         if (auto value = string_opt_for(total_retest_on_failure)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{
                     .name = "--total-retest-on-failure",
                     .min = -1
             }(value);
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--total-retest-on-failure"; _pia.min = -1; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--total-retest-on-failure"; _pia.min = -1; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 app_cfg->total_retest_count = maybe_int.value();
             } else {
@@ -1069,12 +1121,20 @@ struct ProgramOptionsParser {
             }
         }
         if (auto value = string_opt_for(max_logdata_option)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<unsigned>{
                     .name = "--max-logdata",
                     .explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))",
                     .base = 0,      // accept hex
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            #else
+            ParseIntArgument<unsigned> _pia; _pia.name = "--max-logdata"; _pia.explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))"; _pia.base = 0; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<unsigned> _pia; _pia.name = "--max-logdata"; _pia.explanation = "maximum number of bytes of test's data to log per thread (0 is unlimited))"; _pia.base = 0; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 opts.shmem_cfg.max_logdata_per_thread = maybe_int.value();
             } else {
@@ -1084,12 +1144,20 @@ struct ProgramOptionsParser {
                 opts.shmem_cfg.max_logdata_per_thread = UINT_MAX;
         }
         if (auto value = string_opt_for(max_messages_option)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{
                     .name = "--max-messages",
                     .explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)",
                     .min = -1,
                     .range_mode = OutOfRangeMode::Saturate
             }(value);
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--max-messages"; _pia.explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)"; _pia.min = -1; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--max-messages"; _pia.explanation = "maximum number of messages (per thread) to log in each test (0 is unlimited)"; _pia.min = -1; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 opts.shmem_cfg.max_messages_per_thread = maybe_int.value();
             } else {
@@ -1099,7 +1167,15 @@ struct ProgramOptionsParser {
                 opts.shmem_cfg.max_messages_per_thread = INT_MAX;
         }
         if (auto value = string_opt_for(max_test_count_option)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{"--max-test-count"}(value);
+            #else
+            ParseIntArgument<> _pia;  auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia;  auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 app_cfg->max_test_count = maybe_int.value();
             } else {
@@ -1134,12 +1210,20 @@ struct ProgramOptionsParser {
         }
 
         if (auto value = string_opt_for(inject_idle_option)) {
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
+            #if defined(__cpp_designated_initializers) || (__GNUC__ >= 9)
             auto maybe_int = ParseIntArgument<>{
                 .name = "--inject-idle",
                 .min = 0,
                 .max = 50,
                 .range_mode = OutOfRangeMode::Saturate
             }(value);
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--inject-idle"; _pia.min = 0; _pia.max = 50; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
+            #else
+            ParseIntArgument<> _pia; _pia.name = "--inject-idle"; _pia.min = 0; _pia.max = 50; _pia.range_mode = OutOfRangeMode::Saturate; auto maybe_int = _pia(value);
+            #endif
             if (maybe_int) {
                 app_cfg->inject_idle = maybe_int.value();
             } else {

@@ -63,6 +63,49 @@ to_underlying(E e) noexcept
 #endif /* __cpp_lib_to_underlying */
 
 /* ------------------------------------------------------------------ */
+/* std::from_chars / std::to_chars (C++17, <charconv>)                 */
+/* ------------------------------------------------------------------ */
+/* libstdc++ 7 (gcc 7, openEuler 20.03) does not ship <charconv> at all
+ * (added in libstdc++ 8; integer versions there, float in libstdc++ 11). The
+ * chrono code only uses the integer (base-10) forms. Polyfill via strtol and
+ * snprintf — active only when __cpp_lib_to_chars is undefined. */
+#ifndef __cpp_lib_to_chars
+#  include <cerrno>
+#  include <cstdio>
+#  include <cstdlib>
+#  include <system_error>
+#  include <type_traits>
+namespace std {
+struct from_chars_result {
+    const char *ptr;
+    errc ec;
+};
+struct to_chars_result {
+    char *ptr;
+    errc ec;
+};
+template <typename T, typename = typename std::enable_if<std::is_integral<T>::value>::type>
+from_chars_result from_chars(const char *first, const char *last, T &value, int base = 10) {
+    errno = 0;
+    char *endp = nullptr;
+    long long v = std::strtoll(std::string(first, last).c_str(), &endp, base);
+    if (endp == first) return { first, errc::invalid_argument };
+    if (errno == ERANGE) return { endp, errc::result_out_of_range };
+    value = static_cast<T>(v);
+    return { endp, errc{} };
+}
+template <typename T, typename = typename std::enable_if<std::is_integral<T>::value>::type>
+to_chars_result to_chars(char *first, char *last, T value, int base = 10) {
+    // base 10 only is used by the chrono code; snprintf suffices.
+    int n = std::snprintf(first, static_cast<size_t>(last - first), "%lld",
+                          static_cast<long long>(value));
+    if (n < 0 || n > last - first) return { first, errc::value_too_large };
+    return { first + n, errc{} };
+}
+} // namespace std
+#endif /* __cpp_lib_to_chars */
+
+/* ------------------------------------------------------------------ */
 /* std::to_address (C++20, <memory>)                                   */
 /* ------------------------------------------------------------------ */
 /* gcc 7 / libstdc++ 7 lacks std::to_address. It is trivially &*it for
@@ -164,6 +207,39 @@ struct is_callable3<F(A, B, C),
 #    define SANDSTONE_STR_STARTS_WITH(str, x) (str).starts_with(x)
 #  else
 #    define SANDSTONE_STR_STARTS_WITH(str, x) ((str).rfind((x), 0) == 0)
+#  endif
+#endif
+
+/* std::map/unordered_map::contains (C++20). libstdc++ 10+ has it at gnu++20;
+ * gcc 7 / libstdc++ 7 does not. Member-call sites converted to
+ * SANDSTONE_MAP_CONTAINS. */
+#ifndef SANDSTONE_MAP_CONTAINS
+#  if defined(__cpp_lib_map_contains) && __cpp_lib_map_contains >= 202002L
+#    define SANDSTONE_MAP_CONTAINS(m, k) (m).contains(k)
+#  else
+#    define SANDSTONE_MAP_CONTAINS(m, k) ((m).find((k)) != (m).end())
+#  endif
+#endif
+
+/* std::string/string_view::ends_with (C++20). Member-call sites converted to
+ * SANDSTONE_STR_ENDS_WITH; the fallback handles both char and string args via
+ * rfind (finds last occurrence; if it lands at the tail, str ends with x). */
+#ifndef SANDSTONE_STR_ENDS_WITH
+#  if SANDSTONE_CPP_COMPAT >= 20
+#    define SANDSTONE_STR_ENDS_WITH(str, x) (str).ends_with(x)
+#  else
+namespace sandstone_detail {
+template <typename S, typename X>
+inline bool ends_with(const S &str, const X &x) {
+    auto pos = str.rfind(X(x));
+    return pos != S::npos && pos == str.size() - 1;
+}
+template <typename S>
+inline bool ends_with(const S &str, char x) {
+    return !str.empty() && str.back() == x;
+}
+}
+#    define SANDSTONE_STR_ENDS_WITH(str, x) sandstone_detail::ends_with((str), (x))
 #  endif
 #endif
 
@@ -286,8 +362,12 @@ public:
     constexpr span(pointer ptr, index_type count) noexcept
         : data_(ptr), size_(count) {}
 
-    // iterator (pointer) range
-    template <typename It1, typename It2>
+    // iterator (pointer) range — only enabled when BOTH args are iterators
+    // (not integers), so it does not compete with the (pointer, count) ctor
+    // above (which span(groups, groupCount) needs, groupCount being int).
+    template <typename It1, typename It2,
+              typename = typename std::enable_if<
+                  !std::is_integral<It1>::value && !std::is_integral<It2>::value>::type>
     constexpr span(It1 first, It2 last) noexcept
         : data_(&*first), size_(last - first) {}
 

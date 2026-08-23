@@ -70,9 +70,10 @@ public:
 
 #ifdef __cpp_impl_three_way_comparison
             friend auto operator<=>(const_iterator, const_iterator) = default;
-#else
             friend bool operator==(const_iterator, const_iterator) noexcept = default;
-            friend bool operator!=(const_iterator a, const_iterator b) noexcept { return !(a == b); }
+#else
+            friend bool operator==(const_iterator a, const_iterator b) noexcept { return a.ptr == b.ptr; }
+            friend bool operator!=(const_iterator a, const_iterator b) noexcept { return a.ptr != b.ptr; }
 #endif
             friend bool operator==(const_iterator it, sentinel end) noexcept
             {

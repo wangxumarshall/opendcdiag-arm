@@ -193,7 +193,11 @@ static void add_providers(std::string &info)
     if (infos.size() == 0)
         return;
 
+#ifdef __cpp_lib_ranges
     std::ranges::sort(infos);
+#else
+    std::sort(infos.begin(), infos.end());
+#endif
     info += ", providers: ['";
     for (size_t i = 0; i < infos.size(); ++i) {
         if (i)
