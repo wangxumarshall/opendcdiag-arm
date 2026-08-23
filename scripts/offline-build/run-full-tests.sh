@@ -54,6 +54,19 @@ if [ "$SERIES" = "24.03" ]; then
     MOUNTS+=(-v /usr/lib64:/usr/lib64:ro)
 fi
 LIBS_DIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/built/libs"
+# 自愈: 若 built/libs 缺 libatomic (22.03 最小镜像无 libatomic), 从 RPM 树提取
+# (package-built-artifacts.sh 理论上应已打包, 但此处兜底, 确保测试总能跑)
+if [ "$SERIES" = "22.03" ] && [ ! -e "$LIBS_DIR/libatomic.so.1" ]; then
+    RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-22.03/${OS_TAG}"
+    LA_RPM=$(ls "$RPMDIR"/libatomic-*.rpm 2>/dev/null | head -1)
+    if [ -n "$LA_RPM" ]; then
+        mkdir -p "$LIBS_DIR"
+        rm -rf /tmp/_la-extract && mkdir /tmp/_la-extract
+        (cd /tmp/_la-extract && rpm2cpio "$LA_RPM" | cpio -idm --quiet 2>/dev/null) \
+            && cp /tmp/_la-extract/usr/lib64/libatomic.so* "$LIBS_DIR/" 2>/dev/null
+        rm -rf /tmp/_la-extract
+    fi
+fi
 if [ -d "$LIBS_DIR" ]; then
     MOUNTS+=(-v "$LIBS_DIR:/opt/built-libs:ro"); LD_PATH="/opt/built-libs"
 fi

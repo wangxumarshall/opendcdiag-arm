@@ -134,6 +134,25 @@ fi
 
 rm -f "$LIBS_FILE" /tmp/toolset-libs.txt
 
+# 对 22.03: 最小 KIWI 容器缺少 libatomic.so.1 (其余 libstdc++/libz/libzstd/libgmp 自带),
+# 需从 RPM 树的 libatomic-*.rpm 提取 libatomic.so.1 + libatomic.so.1.2.0 到 libs/,
+# 否则容器内跑二进制会 "error while loading shared libraries: libatomic.so.1"。
+if [ "$SERIES" = "22.03" ]; then
+    RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-22.03/${OS_TAG}"
+    LIBATOMIC_RPM=$(ls "$RPMDIR"/libatomic-*.rpm 2>/dev/null | head -1)
+    if [ -n "$LIBATOMIC_RPM" ]; then
+        rm -rf /tmp/libatomic-extract && mkdir /tmp/libatomic-extract
+        if (cd /tmp/libatomic-extract && rpm2cpio "$LIBATOMIC_RPM" | cpio -idm --quiet 2>/dev/null); then
+            cp /tmp/libatomic-extract/usr/lib64/libatomic.so* "$OUTDIR/libs/" 2>/dev/null \
+                && echo "    ✓ libatomic 拷出 (22.03 runtime)" \
+                || echo "    (libatomic 拷贝跳过)"
+        fi
+        rm -rf /tmp/libatomic-extract
+    else
+        echo "    (警告: 22.03 RPM 树无 libatomic-*.rpm, 容器内运行可能失败)" >&2
+    fi
+fi
+
 # 3) 运行脚本
 cat > "$OUTDIR/run-opendcdiag.sh" <<'RUN_EOF'
 #!/bin/bash
