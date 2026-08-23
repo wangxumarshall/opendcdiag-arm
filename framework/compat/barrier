@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// <barrier> shim — 当 libstdc++ 不提供 <barrier> 头文件(GCC 10)时,通过
+// -isystem 指向 framework/compat/, 使源码里的 #include <barrier> 命中本文件。
+// 本文件把 std::barrier 的实现从 cpp23_polyfill.h 引入(受 __cpp_lib_barrier 守卫:
+// 若 libstdc++ 已有 <barrier>,本 shim 不应被找到 — 因为 -isystem 优先级低于
+// 系统标准头路径。但 GCC10 无系统 <barrier>,故 -isystem 兜底生效)。
+//
+// 仅在 OPENEULER_22_03 / OPENEULER_20_03 适配构建路径上使用。
+#pragma once
+#include "cpp23_polyfill.h"
