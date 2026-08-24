@@ -85,10 +85,14 @@ EOF
 }
 
 # 查 manifest 有无该 sp-tag 的 input-hash 记录。有则打印行,无则空。
+# 用共享锁(flock -s)串行化读,避免并发 worker 同时读旧 manifest 都判"无"→都重建。
 manifest_find() {
     local tag="$1" hash="$2"
-    manifest_ensure
-    grep -P "^${tag}\t${hash}\b" "$MANIFEST" 2>/dev/null | head -1 || true
+    (
+        flock -s 200
+        manifest_ensure
+        grep -P "^${tag}\t${hash}\b" "$MANIFEST" 2>/dev/null | head -1 || true
+    ) 200>"${MANIFEST}.lock"
 }
 
 # 追加/更新一行。用 flock 串行化(build-all.sh 并发 worker 同时改 manifest 会丢更新)。
