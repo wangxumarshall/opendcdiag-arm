@@ -171,3 +171,56 @@ chmod +x "$OUTDIR/run-opendcdiag.sh"
 echo "==> $OS_TAG 打包完成:"
 ls -la "$OUTDIR"
 echo "    libs:"; ls "$OUTDIR/libs/" 2>/dev/null | head
+
+# 4) 元数据:BUILD-HASH + MANIFEST.tsv + VERSION(溯源 + skip 判定 + 部署匹配)
+#    BUILD-HASH: build-all.sh 的源码哈希(复用 skip 判定)。计算公式须与
+#    build-all.sh 的 compute_build_hash 一致,否则 skip 失效。
+write_metadata() {
+    local macro cpp_std
+    case "$SERIES" in
+        24.03) macro=""; cpp_std="gnu++23" ;;
+        22.03) macro="OPENEULER_22_03"; cpp_std="gnu++20" ;;
+        20.03) macro="OPENEULER_20_03"; cpp_std="gnu++20" ;;
+    esac
+    # 源码树哈希 + container-build.sh(含 sed 适配)+ 配置 + 镜像 input-hash
+    local src_hash cb_hash img_hash build_hash
+    src_hash=$(git -C "$SRC_ROOT" ls-tree -r HEAD -- framework tests meson.build meson_options.txt 2>/dev/null | sha256sum | awk '{print $1}')
+    cb_hash=$(sha256sum "$SCRIPT_DIR/container-build.sh" | awk '{print $1}')
+    local sp_label
+    case "$SP" in
+        LTS) sp_label="LTS" ;; SP[1-4]) sp_label="LTS-$SP" ;;
+    esac
+    img_hash=$(grep -P "^${SERIES}-${sp_label}\t" "$SCRIPT_DIR/images/image-manifest.tsv" 2>/dev/null | awk -F'\t' '{print $2}' || echo "no-image")
+    build_hash=$(printf '%s|%s|%s|%s|%s|%s-%s\n' "$src_hash" "$cb_hash" "$cpp_std" "${macro:-none}" "$img_hash" "$SERIES" "$sp_label" | sha256sum | awk '{print $1}')
+    echo "$build_hash" > "$OUTDIR/BUILD-HASH"
+
+    # MANIFEST.tsv:产物文件 sha256 + 体积 + 来源
+    {
+        echo "# MANIFEST.tsv — $OS_TAG 产物校验清单"
+        echo -e "file\tsha256\tsize\tsource"
+        for f in opendcdiag run-opendcdiag.sh; do
+            [ -f "$OUTDIR/$f" ] && printf '%s\t%s\t%s\t%s\n' "$f" "$(sha256sum "$OUTDIR/$f" | awk '{print $1}')" "$(stat -c%s "$OUTDIR/$f")" "built"
+        done
+        for f in "$OUTDIR"/libs/*; do
+            [ -f "$f" ] || continue
+            printf '%s\t%s\t%s\t%s\n' "libs/$(basename "$f")" "$(sha256sum "$f" | awk '{print $1}')" "$(stat -c%s "$f")" "bundled"
+        done
+    } > "$OUTDIR/MANIFEST.tsv"
+
+    # VERSION:人读元数据
+    local git_sha bin_sha
+    git_sha=$(git -C "$SRC_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    bin_sha=$(sha256sum "$OUTDIR/opendcdiag" 2>/dev/null | awk '{print $1}' || echo "?")
+    cat > "$OUTDIR/VERSION" <<VERSION_EOF
+opendcdiag $OS_TAG
+git: $git_sha
+built: $(git -C "$SRC_ROOT" log -1 --format=%ci HEAD 2>/dev/null | cut -d' ' -f1 || echo unknown)
+series: $SERIES  sp: $SP
+cpp_std: $cpp_std  macro: ${macro:-none}
+image: ghcr.io/wangxumarshall/opendcdiag-offline:${SERIES}-${sp_label}
+binary-sha256: ${bin_sha:0:64}
+build-hash: ${build_hash:0:64}
+VERSION_EOF
+    echo "    ✓ BUILD-HASH + MANIFEST.tsv + VERSION 写入"
+}
+write_metadata

@@ -150,12 +150,10 @@ build_one() {
     if ! "$SCRIPT_DIR/container-build.sh" "$series" "$sp" 2>&1; then
         echo "RESULT: FAIL $tag (source build)" >&2; return 1
     fi
-    # 4) 打包(写 BUILD-HASH 见 patch 6;此处兜底写)
+    # 4) 打包(含写 BUILD-HASH + MANIFEST + VERSION,见 package-built-artifacts.sh)
     if ! "$SCRIPT_DIR/package-built-artifacts.sh" "$series" "$sp" 2>&1; then
         echo "RESULT: FAIL $tag (package)" >&2; return 1
     fi
-    # 兜底写 BUILD-HASH(patch 6 会把此逻辑并入 package-built-artifacts.sh)
-    compute_build_hash "$series" "$sp" > "$builtdir/BUILD-HASH" 2>/dev/null || true
     # 5) 闸门
     if [ "$NOVERIFY" != 1 ]; then
         if ! "$SCRIPT_DIR/verify-built-pristine.sh" "$series" "$sp" "$MODE" 2>&1; then
