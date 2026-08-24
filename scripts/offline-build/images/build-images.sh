@@ -192,12 +192,16 @@ build_one() {
     if [ "$PUSH" = 1 ]; then
         echo "  推: $REMOTE_TAG"
         # 给镜像打远端 tag 并 push(需先 podman login ghcr.io,见下方提示)
-        if podman tag "$LOCAL_TAG" "$REMOTE_TAG" 2>/dev/null && podman push "$REMOTE_TAG" >/dev/null 2>&1; then
+        podman tag "$LOCAL_TAG" "$REMOTE_TAG" 2>/dev/null
+        # push 失败时打印真实 stderr(不吞),便于诊断(未登录/auth 错/token 权限)
+        if push_out=$(podman push "$REMOTE_TAG" 2>&1); then
             remote_ok="yes"
             # push 后 repoDigests 才有远端 digest
             digest=$(podman image inspect "$REMOTE_TAG" --format '{{range .RepoDigests}}{{.}}{{end}}' 2>/dev/null | sed 's#.*@##' | head -c 71 || echo "")
         else
-            echo "  ⚠ push 失败(未登录 ghcr.io? 跑: echo \$GH_TOKEN | podman login ghcr.io -u ${GHCR_USER} --password-stdin)" >&2
+            echo "  ⚠ push 失败:" >&2
+            echo "$push_out" | grep -iE "error|denied|unauthorized|login|not found" | head -3 >&2
+            echo "  (未登录? 跑: echo \$GHCR_TOKEN | podman login ghcr.io -u ${GHCR_USER} --password-stdin)" >&2
         fi
     fi
     [ -z "$digest" ] && digest=$(image_digest "$LOCAL_TAG")

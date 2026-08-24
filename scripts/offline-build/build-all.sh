@@ -47,6 +47,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --smoke)    MODE="smoke"; shift ;;
         --full)     MODE="full";  shift ;;
+        --all)      SERIES_ARG="all"; SP_ARG="all"; shift ;;   # 全 15 SP
         --no-verify) NOVERIFY=1;  shift ;;
         --jobs)     JOBS="$2"; shift 2 ;;
         --since)    SINCE="$2"; shift 2 ;;

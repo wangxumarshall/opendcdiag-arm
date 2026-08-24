@@ -188,10 +188,22 @@ sp-tag            containerfile-sha  rpm-pin-sha    image-digest                
 
 ### 2.4 Registry 与气隙导入
 
-- **主路径(有网开发机)**:`podman push ghcr.io/wangxumarshall/opendcdiag-offline:<tag>`。ghcr.io 私有仓免费,15 × 250MB ≈ 3.7GB,额度内。
+- **主路径(有网开发机)**:`build-images.sh <series> <sp> --push` → `podman push ghcr.io/wangxumarshall/opendcdiag-offline:<tag>`。ghcr.io 私有仓免费,15 × 250MB ≈ 3.7GB,额度内。
+
+  **ghcr.io 授权(首次 push 前,一次性)**:
+  1. GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → 生成 token,勾选 `write:packages`(写 package)权限。
+  2. 在构建机登录(二选一):
+     ```bash
+     # 用 token:
+     echo "$GHCR_TOKEN" | podman login ghcr.io -u wangxumarshall --password-stdin
+     # 或交互:
+     podman login ghcr.io     # Username: wangxumarshall  Password: <token>
+     ```
+  3. 登录后 `build-images.sh 24.03 SP3 --push` 实测 push;manifest 的 `remote` 列变 `yes`、`image-digest` 写入远端 digest。
+
 - **气隙路径**:在有网机 `build-images.sh <s> <sp> --tar` → 得 `dist/images/<tag>.oci.tar`(~250MB)→ 拷到现场 → `podman load < <tag>.oci.tar`。
   - 等价命令:`skopeo copy docker://ghcr.io/...:<tag> oci-archive:/path/<tag>.tar`
-- **跨 CI runner**:GitHub Actions 直接 `podman pull ghcr.io/...:<tag>`,无需每 job 重建镜像。
+- **跨 CI runner**:GitHub Actions 直接 `podman pull ghcr.io/...:<tag>`,无需每 job 重建镜像(GHA 默认有 `packages: read` 权限)。
 
 ---
 
