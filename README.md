@@ -1,6 +1,6 @@
 # OpenDCDiag-ARM
 
-OpenDCDiag-ARM 是从 Intel OpenDCDiag 移植而来的 ARM64 CPU 缺陷检测工具。它围绕一套完善的测试框架，用一组压力用例对 CPU 各计算单元施压，并通过与 golden value 的逐字节 `memcmp` 比对判定硅片是否正常工作——核心目标是捕捉**静默数据损坏（Silent Data Corruption, SDC）**：计算不崩溃却产出错误位。x86-64 为参考架构，本仓库在 ARM64（Kunpeng 920 / 通用 ARMv8.1+）上做并行移植，x86 路径保持不动。
+OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in ARM CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework.
 
 ## 快速开始
 
