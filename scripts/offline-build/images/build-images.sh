@@ -277,5 +277,5 @@ if [ -z "$SP_ARG" ]; then
     # 只给 series → 构建该系列全部 SP
     for sp in $ALL_SP; do build_one "$SERIES_ARG" "$sp" || true; done
 else
-    build_one "$SERIES_ARG" "$SP_ARG"
+    build_one "$SERIES_ARG" "$SP_ARG" || exit 1
 fi

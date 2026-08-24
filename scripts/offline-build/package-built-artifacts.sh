@@ -54,8 +54,8 @@ IMG="localhost/openeuler-offline:${SERIES}-LTS${SP#LTS}"
 # 收集 ldd 输出的库路径
 LIBS_FILE="$(mktemp)"
 timeout 120 podman run --rm --user=0 \
-    -v "$SRC_ROOT/build-out/${OS_TAG}:/b:ro" \
-    -v "$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}:/rpms:ro" \
+    -v "$SRC_ROOT/build-out/${OS_TAG}:/b:ro,Z" \
+    -v "$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}:/rpms:ro,Z" \
     "$IMG" bash -c '
 mkdir -p /var/tmp /tmp
 rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true
