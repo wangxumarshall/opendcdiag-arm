@@ -1,5 +1,8 @@
 # OpenDCDiag-ARM
-OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework.
+
+OpenDCDiag-ARM 是一个用于识别 CPU 缺陷与故障的开源工具，从 Intel 的 OpenDCDiag 移植而来。它围绕一套完善的 CPU 测试框架构建，由一系列压力测试用例组成。其核心目标是捕捉**静默数据损坏（Silent Data Corruption, SDC）**——计算不崩溃、却产出错误位的结果，通过与 golden value 的逐字节 `memcmp` 比对来判定硅片是否正常工作。
+
+x86-64 仍为参考架构；本仓库在 ARM64（Kunpeng 920 / 通用 ARMv8.1+）上做了并行移植，保留 x86 路径不动。
 
 ## Prebuilt binaries by openEuler version (`third-party/rpms`)
 
@@ -116,45 +119,57 @@ cd scripts/offline-build/
 For the full dependency breakdown and pitfalls, see
 [docs/offline-build-dependencies.md](docs/offline-build-dependencies.md).
 
-## Building OpenDCDiag-ARM
-### Prerequisites
-#### openEuler
-OpenDCDiag-ARM has been built and tested on openEuler 24.03 (LTS-SP3).
+## 构建
+
+### 依赖
+
+#### openEuler（推荐，基准构建平台）
+已在 openEuler 24.03 LTS-SP3（Kunpeng 920，aarch64）上构建并验证。
 ```console
-# Install dependencies (requires root)
+# 安装依赖（需 root）
 sudo dnf install -y meson ninja-build gcc g++ cmake boost-devel zlib-devel libzstd-devel gtest-devel
-# Note: Eigen 5.0.0 is required (see Building section)
+# Eigen 5.0.0+ 必需（仓库自带 third-party/eigen5，见下文）
 ```
+
 #### Ubuntu
-OpenDCDiag-ARM has been built and tested on Ubuntu 21.04 and 21.10.
-Before building, the following prerequisites must be installed.
+已在 Ubuntu 21.04 / 21.10 上构建。安装依赖：
 ```console
 sudo apt-get install gcc g++ cmake libeigen3-dev libboost-all-dev libzstd-dev zlib1g-dev libgtest-dev meson
 ```
+
 #### Fedora
-OpenDCDiag-ARM has been built and tested on Fedora 33 and 34.
-Before building, the following prerequisites must be installed.
+已在 Fedora 33 / 34 上构建。安装依赖：
 ```console
 sudo dnf install -y boost-devel eigen3-devel gcc gcc-c++ git gtest-devel meson zlib-devel libzstd-devel
 ```
-### Architecture Support
-OpenDCDiag-ARM supports the following architectures:
-| Architecture | Status | Notes |
-|--------------|--------|-------|
-| ARM64 (AArch64) | ✅ Full Support | Kunpeng 920, generic ARMv8.1+ |
-#### ARM64 (AArch64) Support
-OpenDCDiag-ARM provides full support for ARM64 architecture, including:
-- **CPU Detection**: FP, NEON, CRC32, Crypto extensions, SVE/SVE2
-- **Topology Detection**: ACPI PPTT, sysfs, device tree
-- **SDC Detection**: ECC errors, CRC32/CRC64 validation
-- **SIMD Operations**: NEON (128-bit) with 256/512-bit emulation
-- **RAS/ECC**: EDAC subsystem, ACPI APEI, vendor drivers
-**Building for ARM64 (Native)**:
+
+### 架构支持
+
+| 架构 | 状态 | 说明 |
+|------|------|------|
+| ARM64（AArch64） | ✅ 全支持 | Kunpeng 920、通用 ARMv8.1+ |
+| x86-64 | 参考架构 | 原始 Intel 代码路径，移植过程中保持不动 |
+
+ARM64 能力覆盖：
+- **CPU 特性检测**：FP、NEON、CRC32、Crypto 扩展（AES/SHA）、SVE/SVE2
+- **拓扑检测**：ACPI PPTT、sysfs、device tree
+- **SDC 检测**：ECC 错误（EDAC）、CRC32/CRC64 校验
+- **SIMD 运算**：NEON（128 位）+ 256/512 位仿真
+- **RAS/ECC**：EDAC 子系统、ACPI APEI、厂商驱动
+
+### ARM64 原生构建
+
+ARM64 要求 Eigen 5.0.0+（系统自带的 Eigen 3.3.x 在 GCC 12+ 下会编译失败）。仓库已自带 `third-party/eigen5/`，aarch64 构建路径在 `tests/cpu/meson.build` 中直接 `include_directories` 指向它，**无需系统安装 eigen3**。
+
 ```console
-# ARM64 requires Eigen 5.0.0+ (system Eigen 3.3.x is incompatible with GCC 12+)
-# Prepare Eigen 5.0.0 if not available in system
+# 仓库自带 eigen5，PKG_CONFIG_PATH 仅为兼容 x86 路径而保留（aarch64 可省，带上无害）
+PKG_CONFIG_PATH=./third-party/eigen5 meson setup builddir --buildtype=release
+ninja -C builddir
+```
+
+若需用自备的 Eigen 5.0.0 源码包，先为其生成 pkg-config 文件：
+```console
 tar -xjf eigen-5.0.0.tar.bz2
-# Create pkg-config file for custom Eigen
 cat > eigen-5.0.0/eigen3.pc << 'EOF'
 prefix=/path/to/eigen-5.0.0
 exec_prefix=${prefix}
@@ -163,158 +178,145 @@ Description: A C++ template library for linear algebra
 Version: 5.0.0
 Cflags: -I${prefix}
 EOF
-# Configure with custom Eigen
 PKG_CONFIG_PATH=./eigen-5.0.0 meson setup builddir --buildtype=release
-# Build
 ninja -C builddir
 ```
-**Kunpeng 920 Optimized Build**:
+
+**Kunpeng 920 优化构建**：
 ```console
-meson builddir --buildtype=release -Dkunpeng_optimize=true
+meson setup builddir --buildtype=release -Dkunpeng_optimize=true
 ninja -C builddir
 ```
-**Building with OpenSSL SHA (openssl_sha test)**:
-The `openssl_sha` test computes SHA-256/384/512 checksums via OpenSSL and
-compares them against golden values to detect silent data corruption (SDC).
-It is **not built by default** — OpenSSL is an optional dependency, gated by
-the `ssl_link_type` meson option (default `none`).
 
-Install the OpenSSL development package, then configure with
-`-Dssl_link_type=<mode>`:
+### 可选：启用 OpenSSL SHA 测试（`openssl_sha`）
 
-| `ssl_link_type` | Behavior |
-|-----------------|----------|
-| `none` (default)| OpenSSL not used; `openssl_sha` is absent from the binary |
-| `dynamic`       | Links `libcrypto` at build time; test calls it directly |
-| `static`        | Same as `dynamic`, but links the static `libcrypto` |
-| `loaded`        | `dlopen()`s `libcrypto` at runtime (no link-time dependency) |
+`openssl_sha` 通过 OpenSSL 计算 SHA-256/384/512，与 golden value 比对以检测 SDC。它**默认不构建**——OpenSSL 是可选依赖，由 meson 选项 `ssl_link_type`（默认 `none`）控制。
+
+| `ssl_link_type` | 行为 |
+|-----------------|------|
+| `none`（默认）| 不使用 OpenSSL；二进制中不含 `openssl_sha` |
+| `dynamic`       | 构建期链接 `libcrypto`；测试直接调用 |
+| `static`        | 同 `dynamic`，但链接静态 `libcrypto` |
+| `loaded`        | 运行期 `dlopen()` 加载 `libcrypto`（无构建期依赖） |
 
 ```console
-# openEuler: install OpenSSL development headers (requires root)
+# openEuler 安装 OpenSSL 开发包
 sudo dnf install -y openssl-devel
 # Ubuntu: sudo apt-get install libssl-dev
 # Fedora: sudo dnf install -y openssl-devel
 
-# Configure with OpenSSL SHA enabled (dynamic linking), using Eigen 5
-PKG_CONFIG_PATH=./eigen-5.0.0 meson setup builddir --buildtype=release \
+# 用 Eigen 5 + 动态链接 OpenSSL 配置
+PKG_CONFIG_PATH=./third-party/eigen5 meson setup builddir --buildtype=release \
     -Dssl_link_type=dynamic
-# Build
 ninja -C builddir
-# Confirm openssl_sha is now in the test catalog
-./builddir/opendcdiag --list-tests | grep openssl_sha
-# Run the OpenSSL SHA test
+./builddir/opendcdiag --list-tests | grep openssl_sha    # 确认已进入测试目录
 ./builddir/opendcdiag -e openssl_sha -t 5000
 ```
-If the configure step cannot find `libcrypto`, verify that
-`pkg-config --modversion libcrypto` prints a version (provided by the
-`openssl-devel` / `libssl-dev` package above).
 
-> Note: on a build that was configured without `-Dssl_link_type`, you must
-> reconfigure (`meson setup --reconfigure builddir -Dssl_link_type=dynamic`)
-> or create a fresh build directory — `ninja` alone will not pick it up.
+若 configure 找不到 `libcrypto`，用 `pkg-config --modversion libcrypto` 确认它输出了版本号（由上方的 `openssl-devel` / `libssl-dev` 提供）。
 
-**Running ARM64 Tests**:
-ARM64-specific tests (arm64_sdc, neon_add, arm_crypto, etc.) are quality level BETA.
-Use `--quality=0` to enable them:
+> 若曾以不带 `-Dssl_link_type` 的配置构建过，必须重新配置
+> （`meson setup --reconfigure builddir -Dssl_link_type=dynamic`）或新建构建目录——单独跑 `ninja` 不会生效。
+
+## 测试用例与检测能力
+
+OpenDCDiag-ARM 当前 ARM64 构建（Kunpeng 920 / openEuler 24.03 SP3）共编译 **273 个测试用例**，覆盖 CPU 各计算单元与子系统的静默数据损坏（SDC）压力检测。下表按检测域归纳，数量与命名均来自 `./builddir/opendcdiag --quality=-1 -l` 的真实输出。
+
+> 命名说明：许多 ARM64 用例沿用了上游 x86 名字（如 `mesh_upi_avx2_*`、`fma_*_avx512`、`ipsec_*_avx`/`_sse`/`_x86_64`），但实现已落到 **NEON / ARM 原生指令**上（描述含 "(ARM NEON version)" / "(ARM64...)" / "simulated on ARM64"）。命名保留是为了与 x86 参考用例对应，便于跨架构比对结果。
+
+| 检测域 | 代表用例 | 检测能力 |
+|--------|----------|----------|
+| **内存 / 拷贝** | `memcpy0`..`memcpy_l3_cache_size`、`memcpy_sem`、`memcpy_shuffle`、`memcpy_rewr`、`mem_disambiguation`、`mfence`、`modified_sort`、`memcpy_variations_dyn`、`vmovnt1/2/3*`、`mmu_stress_arm` | L1D/L2/L3 各级缓存带宽压力、store-to-load 转发、跨缓存行一致性与内存序、MMU/TLB 针对性扰动 |
+| **缓存 / 互联** | `cachebounce`、`cache_stress_aggressor`、`mesh_upi_{avx,avx2,avx512,sse}_*`（约 27 个） | cache line 弹跳、CLFLUSH 压力、MESH/UPI/环形互联的对称/非对称读写在多核间的协同 |
+| **锁 / 原子** | `lock*`、`lockless_cmpxchg{,8b,16b}`、`atomic_simd_{128,256,512}`、`atomic_seq_cst`、`spinlock_*`（共约 32 个） | 锁指令、无锁 cmpxchg、128/256/512 位 SIMD 原子访问、自旋锁各类竞争与跨缓存行/跨 socket 场景（ARM64 atomic builtins） |
+| **向量 / SIMD** | `swizzle`、`insert_extract`、`kreg1`..`kreg9`、`gather{,scatter}_*`（NEON 仿真） | NEON 排列/插入抽取、掩码寄存器逻辑（x86 k-reg 在 ARM64 仿真）、gather/scatter 数据通路 |
+| **FMA / 浮点** | `fma`、`fma_patterns_avx512_*`、`fma_tail*`、`fmatail*`、`fpu_special_values` | FMA 基础与模式压力、尾数精度（tail precision）穷举、NaN/Inf/非规格化等特殊值经 NEON FMA 后的逐字节 golden 比对 |
+| **算术 / 大整数** | `adcx`、`adox`、`adcxlong`、`adcx_adox_interleaved`、`adcx_arm`、`bigint_mulx_arm`、`gmp_big{add,num}`、`operand_space_arm` | 进位链 / 溢出链（ADCX/ADOX）、GMP 大整数乘加、高汉明距离操作数压满加法器/进位链/乘法器门翻转 |
+| **CRC / 校验** | `crc32`、`crc32_fixed*`、`isal_crc{32,64}_*`、`zpclmul{,_rep}` | ARM64 `crc32` 指令、isa-l CRC32/CRC64 各标准（IEEE/iSCSI/T10/ECMA/ISO/Jones）、zlib PCLMUL CRC 折叠（NEON 实现） |
+| **压缩** | `zlib`/`zlib9`/`zlib1`/`zlib_aaa`/`zfuzz`、`zstd`/`zstd19`/`zstd1`/`zstd_aaa` | zlib / zstd 压缩-解压缩往返、不同压缩级别、高度可压缩数据、fuzz 压力 |
+| **线性代数（Eigen）** | `eigen_gemm_*`（7）、`eigen_sparse`、`eigen_svd*`（含 `_cdouble_sve`）、`eigen_svd_jacobi_*` | GEMM 矩阵乘、稀疏 Cholesky 求解、SVD（BDCSVD / Jacobi）对 FMA/向量单元施压；SVE 变体在 SVE 硬件上启用，非 SVE 硬件干净跳过 |
+| **IPSec / 密码** | `ipsec_*`（约 46 个，含 AES-CBC/CTR/GCM、HMAC-SHA1/224/256/384/512、XCBC、CMAC、3DES-DOCSIS） | 各类 IPsec 加解密 + 认证组合在 NEON 上的 SDC 检测（命名保留 `_avx`/`_sse`/`_x86_64`/`_avx512` 后缀对应 x86 变体） |
+| **OpenSSL SHA** | `openssl_sha` | SHA-256/384/512 经 OpenSSL 计算后与 golden 比对（需 `-Dssl_link_type≠none`） |
+| **ARM 加密扩展** | `arm_crypto`（BETA） | ARM AES（AESE/AESMC）crypto 扩展数据通路 SDC 检测 |
+| **虚拟化 / 系统寄存器** | `vmx_io_exit`、`vmx_vmexit_*`、`vmxmsr` | guest 触发 vmexit（读 MIDR_EL1/CNTVCT_EL0、dc civac、YIELD 等）的退出路径一致性 |
+| **ARM64 SDC 专项** | `arm64_sdc`（BETA）、`power_virus_dit`、`ooo_dep_chain_arm`、`lsu_store_forward_arm`、`l2c_cross_cache_line_arm`、`mmu_split_tlb_arm`、`crt_builtins`、`acl_gemm`、`fisttp_arm` | CRC32/CRC64 校验数据通路；di/dt 电压骤降瞬态 power virus；乱序执行依赖链；LSU store-buffer/load-forwarding 跨界/部分转发；L2 跨缓存行一致性；MMU/TLB/页表遍历器；compiler-rt 软浮点 builtins；Arm Compute Library GEMM/FCVTZS |
+| **IST 硬件自检** | `ist`、`ist_array`、`ist_sbaf` | ARM64 In-Silicon Test 硬件自检（**当前为 placeholder**，见下文） |
+
+### 用例质量分级
+
+用例按质量级别（`quality_level`）决定何时运行。**默认为 PROD（2）**，需用 `--quality` 显式下调才能跑更低级别。
+
+| 级别 | 名称 | 含义 | 运行条件 | 本 ARM64 二进制实有数量 |
+|------|------|------|----------|----------------------|
+| -1 | SKIP | 跳过级 | `quality >= -1` | 5 |
+| 0 | BETA | Beta 测试 | `quality >= 0` | 4 |
+| 2 | PROD | 生产就绪（默认） | `quality >= 2` | 264 |
+| | **合计** | | | **273** |
+
+> 上表数量经实测差分得到：`--list-tests`（PROD）= 264，`--quality=0 --list-tests` = 268，`--quality=-1 --list-tests` = 273。
+
+**BETA（`--quality=0`）4 个**：`arm64_sdc`、`arm_crypto`、`ist_sbaf`、`neon_add`
+
+**SKIP（`--quality=-1`）5 个**：`smi_count`、`eigen_svd_jacobi`、`eigen_svd_jacobi_cdouble`、`eigen_svd_jacobi_double`、`eigen_svd_jacobi_fvectors`
+
 ```console
-# List all tests including ARM64 beta tests
+# 只列 PROD（默认）
+./builddir/opendcdiag --list-tests
+# 列 BETA + PROD
 ./builddir/opendcdiag --quality=0 --list-tests
-# Run ARM64 SDC test
-./builddir/opendcdiag --quality=0 -e arm64_sdc -t 5000
-# Run NEON test
-./builddir/opendcdiag --quality=0 -e neon_add -t 5000
+# 列全部（含 SKIP）
+./builddir/opendcdiag --quality=-1 --list-tests
+# 列出用例 + 描述 + 分组
+./builddir/opendcdiag -l
+# 列出分组（@compression / @ipsec / @math）
+./builddir/opendcdiag --list-groups
 ```
-**Eigen SVD on ARM64 (NEON + SVE)**:
-The `eigen_svd_cdouble` test (complex-double BDCSVD, used to stress FMA/vector
-units for SDC detection) is the ARM64-native counterpart of the x86 AVX-512
-build. On ARM64 it runs on the NEON backend by default; on x86-64 it keeps the
-original AVX-512 gating (`minimum_cpu = cpu_skylake_avx512`).
+
+### 占位用例（placeholder）的诚实跳过
+
+移植中暂无法实现的特性，其用例必须返回 `EXIT_SKIP` 并附理由 `"to be implemented (placeholder): <缺失内容>"`，而**不能**返回 `EXIT_SUCCESS` 伪装通过。当前 ARM64 二进制中的 placeholder（实测 `skip-reason`）：
+
+| 用例 | 跳过理由（实测） |
+|------|------------------|
+| `ist` / `ist_array` | `to be implemented (placeholder): ARM64 In-Silicon Test (IST) backend not yet available; test reserved as the counterpart of Intel IFS` |
+| `ist_sbaf`（BETA） | 同上，SBAF 硬件功能自检后端待实现 |
+| `smi_count`（SKIP） | `to be implemented (placeholder): SMI counting requires a per-CPU firmware/RAS-interrupt counter not available on this architecture` |
+
+> `mce_check` 是个特例：它是 ARM64 上**真实**的 EDAC 后端测试（统计 `/proc/interrupts` 的 EDAC `ce/ue_count`），实测 `exit: pass`，而非 placeholder。
+
+### 运行测试
 
 ```console
-# eigen_svd_cdouble runs on the NEON backend (default ARM64 build)
+./builddir/opendcdiag --list-tests            # 列出默认 PROD 用例
+./builddir/opendcdiag -e zstd19 -t 5000       # 跑单个测试，5 秒，全核
+./builddir/opendcdiag -e zstd19 -t 5000 -n 1 # 单线程（确定性，规避 192 核 ULP 数值 flakiness）
+./builddir/opendcdiag --quality=0 -e arm64_sdc -t 5000   # 跑 BETA 级 ARM64 SDC 用例
+./builddir/opendcdiag --quality=-1 -e eigen_svd_jacobi -t 5000  # 跑 SKIP 级用例
+./builddir/opendcdiag --dump-cpu-info         # 打印检测到的 CPU + 特性 + 拓扑后退出
+./builddir/opendcdiag -s help                 # 列出 RNG 引擎（Constant/LCG/AES）
+./builddir/opendcdiag --on-crash=context -e selftest_sigsegv -vv  # 崩溃回溯
+```
+
+**Eigen SVD 在 ARM64（NEON + SVE）**：`eigen_svd_cdouble`（复数 double BDCSVD）是 x86 AVX-512 构建的 ARM64 原生对应物，默认跑在 NEON 后端。SVE 硬件（如 Kunpeng 930）另有变体 `eigen_svd_cdouble_sve`（用 Eigen SVE 包后端，aarch64 自动构建）；无 SVE 的硬件（如 Kunpeng 920）在 init 阶段干净跳过（`CpuNotSupported`），不执行任何 SVE 指令。
+
+```console
+# NEON 后端（默认 ARM64 构建）
 ./builddir/opendcdiag --quality=-1 -e eigen_svd_cdouble -t 5000
-```
-
-For SVE-capable hardware (e.g. Kunpeng 930), a second variant,
-`eigen_svd_cdouble_sve`, is compiled against Eigen's SVE packet backend and
-built automatically on aarch64. On a CPU without SVE (e.g. Kunpeng 920) it
-reports a clean `CpuNotSupported` skip at init time and never executes any SVE
-instructions.
-```console
-# Runs only on SVE hardware; skips cleanly on Kunpeng 920
+# 仅 SVE 硬件运行；Kunpeng 920 干净跳过
 ./builddir/opendcdiag --quality=-1 -e eigen_svd_cdouble_sve -t 5000
 ```
-For detailed ARM64 build information, see [docs/BUILD_ARM64.md](docs/BUILD_ARM64.md).
-## Test Quality Levels
-OpenDCDiag-ARM tests are classified by quality levels that determine when they run:
-| Level | Name | Description | Run Condition |
-|-------|------|-------------|---------------|
-| -1 | SKIP | Skip level | `quality >= -1` |
-| 0 | BETA | Beta test | `quality >= 0` |
-| 1 | (none) | Internal use | `quality >= 1` |
-| 2 | PROD | Production ready (default) | `quality >= 2` |
-**Note**: Default quality is 2 (PROD). Tests with level < 2 need explicit quality parameter.
-### Quality=1 Tests (19 tests)
-| Test | Category | Description |
-|------|----------|-------------|
-| eigen_gemm_double14 | Eigen GEMM | Double precision matrix multiply (14x14) |
-| eigen_gemm_cdouble_dynamic_square | Eigen GEMM | Complex double dynamic matrix multiply |
-| eigen_gemm_double_dynamic_square | Eigen GEMM | Double dynamic matrix multiply |
-| eigen_gemm_float_dynamic_square | Eigen GEMM | Float dynamic matrix multiply |
-| eigen_sparse | Eigen Sparse | Sparse matrix operations |
-| eigen_svd | Eigen SVD | Singular value decomposition |
-| eigen_svd_cdouble_noavx512 | Eigen SVD | Complex double SVD (no AVX512) |
-| eigen_svd_double2 | Eigen SVD | Double precision SVD (variant 2) |
-| eigen_svd_double | Eigen SVD | Double precision SVD |
-| eigen_svd_fvectors | Eigen SVD | Float vectors SVD |
-| zstd19 | Compression | Zstd compression (v1.9) |
-| zstd | Compression | Zstd compression (latest) |
-| zstd1 | Compression | Zstd compression (v1.0) |
-| zstd_aaa | Compression | Zstd compression AAA mode |
-| zfuzz | Compression | Zstd fuzz testing |
-| zlib9 | Compression | Zlib compression (v1.9) |
-| zlib | Compression | Zlib compression (latest) |
-| zlib1 | Compression | Zlib compression (v1.0) |
-| zlib_aaa | Compression | Zlib compression AAA mode |
-### Quality=0 New Tests (5 tests, ARM64-specific)
-| Test | Category | Description |
-|------|----------|-------------|
-| neon_add | NEON SIMD | NEON vector addition operations |
-| neon_perf | NEON SIMD | NEON performance benchmark |
-| arm_crypto | Crypto | ARM cryptographic instructions (AES/SHA) |
-| arm64_sdc | SDC Detection | Silent Data Corruption detection via CRC32/CRC64 |
-| arm64_stress | Stress | ARM64 stress testing |
-### Quality=-1 New Tests (4 tests, Jacobi SVD variants)
-| Test | Category | Description |
-|------|----------|-------------|
-| eigen_svd_jacobi | Eigen SVD | Generic Jacobi SVD |
-| eigen_svd_jacobi_cdouble | Eigen SVD | Jacobi SVD for complex double |
-| eigen_svd_jacobi_double | Eigen SVD | Jacobi SVD for double precision |
-| eigen_svd_jacobi_fvectors | Eigen SVD | Jacobi SVD for float vectors |
-### Running Tests by Quality
-```console
-# Run only PROD tests (default, quality=2)
-./builddir/opendcdiag --list-tests
-# Run BETA + PROD tests (quality=0)
-./builddir/opendcdiag --quality=0 --list-tests
-# Run all tests including SKIP (quality=-1)
-./builddir/opendcdiag --quality=-1 --list-tests
-```
-## Contributions
-The OpenDCDiag-ARM project welcomes contributions and pull requests.
-Please see [Contributing to OpenDCDiag](CONTRIBUTING.md) for more
-details.
-## Code of Conduct
-The OpenDCDiag-ARM project has adopted the Contributor's Covenant as its [Code of
-Conduct][coc]. The project requires contributors and users to follow our Code
-of Conduct, both in letter and in spirit.
+
+## 贡献
+
+欢迎为 OpenDCDiag-ARM 贡献代码与提交 pull request。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 行为准则
+
+OpenDCDiag-ARM 项目采用 Contributor's Covenant 作为 [行为准则][coc]，要求贡献者与使用者在字面与精神上共同遵守。
 [coc]: CODE_OF_CONDUCT.md
-## Writing Tests
-The OpenDCDiag-ARM framework is designed to make the creation of new CPU
-tests as simple as possible. It takes care of much of the boiler
-plate code CPU tests need, e.g., test life cycle, threading model, CPU
-feature identification, random number generation, etc. This allows test
-authors to concentrate on the specific test functionality that
-interests them. A detailed guide to writing new OpenDCDiag tests is
-presented in [A Guide to Writing OpenDCDiag
-tests](docs/writing_tests.md).
+
+## 编写测试
+
+OpenDCDiag-ARM 框架旨在让新建 CPU 测试尽可能简单，它处理了大量样板代码：测试生命周期、线程模型、CPU 特性识别、随机数生成等，使测试作者能专注于具体功能。详细指南见 [编写 OpenDCDiag 测试指南](docs/writing_tests.md)。
+
+> 关于离线构建、依赖树与版本管制的完整说明，见 [docs/offline-build-dependencies.md](docs/offline-build-dependencies.md)。
