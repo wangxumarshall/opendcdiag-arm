@@ -56,8 +56,10 @@ echo "==> 产物输出(host): $OUTDIR_HOST"
 mkdir -p "$OUTDIR_HOST"
 
 # 容器内入口脚本:装依赖 + 构建 + 测试,所有产物落 /out (映射到 host OUTDIR)
+# inner-build.sh 用 SP-specific 路径(并发 worker 各自一份,避免覆盖竞态)。
 INNER=/tmp/inner-build.sh
-cat > "$SRC_ROOT/build-out/inner-build.sh" <<'INNER_EOF'
+INNER_HOST="$SRC_ROOT/build-out/inner-build-${OS_TAG}.sh"
+cat > "$INNER_HOST" <<'INNER_EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -208,7 +210,7 @@ cp "$BIN" "$OUT/opendcdiag"
 ldd "$BIN" 2>/dev/null | awk '{print $1}' | sort -u > "$OUT/ldd-libs.txt" || true
 echo "===== 容器内构建完成 ====="
 INNER_EOF
-chmod +x "$SRC_ROOT/build-out/inner-build.sh"
+chmod +x "$INNER_HOST"
 
 # 决定注入宏与 cpp_std
 # 注: 宏名用 OPENEULER_22_03 / OPENEULER_20_03 (点号→下划线),因 C 预处理器宏标识符
@@ -237,7 +239,7 @@ ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
 [ -d "$ACL_HDR" ] && EXTRA_MESON+=("-Dacl_incdir=$ACL_HDR")
 EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
-MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$SRC_ROOT/build-out/inner-build.sh:$INNER:ro")
+MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$INNER_HOST:$INNER:ro")
 # 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)。
 # 源码包入仓 third-party/meson/meson-0.59.4(11M, 纯源码, 可复现)。
 [ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/third-party/meson/meson-0.59.4" ] && \

@@ -91,15 +91,18 @@ manifest_find() {
     grep -P "^${tag}\t${hash}\b" "$MANIFEST" 2>/dev/null | head -1 || true
 }
 
-# 追加/更新一行
+# 追加/更新一行。用 flock 串行化(build-all.sh 并发 worker 同时改 manifest 会丢更新)。
 manifest_set() {
     local tag="$1" hash="$2" cfsha="$3" pin="$4" macro="$5" quay="$6" digest="$7" local_ok="$8" remote_ok="$9" date_="${10}" size="${11}"
-    manifest_ensure
-    # 删旧(同 sp-tag 任意 hash),再追加新行
-    grep -vP "^${tag}\t" "$MANIFEST" > "$MANIFEST.tmp" || true
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$tag" "$hash" "$cfsha" "$pin" "$macro" "$quay" "$digest" "$local_ok" "$remote_ok" "$date_" "$size" >> "$MANIFEST.tmp"
-    mv "$MANIFEST.tmp" "$MANIFEST"
+    (
+        flock -x 200
+        manifest_ensure
+        # 删旧(同 sp-tag 任意 hash),再追加新行
+        grep -vP "^${tag}\t" "$MANIFEST" > "$MANIFEST.tmp" || true
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$tag" "$hash" "$cfsha" "$pin" "$macro" "$quay" "$digest" "$local_ok" "$remote_ok" "$date_" "$size" >> "$MANIFEST.tmp"
+        mv "$MANIFEST.tmp" "$MANIFEST"
+    ) 200>"${MANIFEST}.lock"
 }
 
 # ── 镜像体积估算(本地镜像,podman image inspect) ──
