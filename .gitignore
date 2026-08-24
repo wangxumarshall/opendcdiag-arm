@@ -8,6 +8,11 @@
 /run-pid.txt
 # typical names for meson build directories
 /build*/
+# offline-build runtime artifacts (generated, not source):
+#   dist/            — 现场 tarballs (package-release.sh 产物)
+#   built-index.tsv  — 跨 SP 总表 (package-release.sh 每次重新生成)
+dist/
+/scripts/offline-build/built-index.tsv
 # ctags
 tags
 /.vscode/
