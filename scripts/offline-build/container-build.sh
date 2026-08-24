@@ -220,8 +220,8 @@ chmod +x "$SRC_ROOT/build-out/inner-build.sh"
 # 注: 宏名用 OPENEULER_22_03 / OPENEULER_20_03 (点号→下划线),因 C 预处理器宏标识符
 # 不允许含点号 ('.')。语义与目标意图一致,仅隔离 22.03/20.03 适配,不触碰 24.03。
 # 20.03 特殊: 系统自带 meson 0.54 + python3.7 太旧(meson 0.59 RPM 也跑不动,需
-# importlib.metadata / py3.8+)。故 20.03 用 meson 0.59.4 源码包(build-out/meson-0.59.4)
-# 直接 python3 meson.py 运行(纯 Python,兼容 py3.7)。
+# importlib.metadata / py3.8+)。故 20.03 用 meson 0.59.4 源码包(入仓
+# third-party/meson/meson-0.59.4, 纯 Python, 兼容 py3.7)直接 python3 meson.py 运行。
 case "$SERIES" in
     24.03) OEU_MACRO="";        CPPSTD="gnu++23"; MESON_BIN="meson" ;;
     22.03) OEU_MACRO="OPENEULER_22_03"; CPPSTD="gnu++20"; MESON_BIN="meson" ;;
@@ -243,9 +243,10 @@ ACL_HDR="/home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include"
 ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
 MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$SRC_ROOT/build-out/inner-build.sh:$INNER:ro")
-# 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)
-[ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/build-out/meson-0.59.4" ] && \
-    MOUNTS+=(-v "$SRC_ROOT/build-out/meson-0.59.4:/meson-src:ro")
+# 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)。
+# 源码包入仓 third-party/meson/meson-0.59.4(11M, 纯源码, 可复现)。
+[ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/third-party/meson/meson-0.59.4" ] && \
+    MOUNTS+=(-v "$SRC_ROOT/third-party/meson/meson-0.59.4:/meson-src:ro")
 [ -d "$ACL_HDR" ] && MOUNTS+=(-v "$ACL_HDR:$ACL_HDR:ro")
 [ -d "$ACL_LIB" ] && MOUNTS+=(-v "$ACL_LIB/libarm_compute.so:$ACL_LIB/libarm_compute.so:ro" -v "$ACL_LIB/libarm_compute_graph.so:$ACL_LIB/libarm_compute_graph.so:ro")
 [ -d "$CLANG_RT" ] && MOUNTS+=(-v "$CLANG_RT:$CLANG_RT:ro")

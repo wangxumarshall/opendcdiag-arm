@@ -1,0 +1,5 @@
+# meson-0.59.4 是 vendored 纯源码(只读,供 20.03 构建)。运行 meson.py 会生成
+# __pycache__/*.pyc — 这些是 Python 字节码缓存,非源码,不入仓。
+meson-0.59.4/**/__pycache__/
+meson-0.59.4/**/*.pyc
+*.tar.gz
