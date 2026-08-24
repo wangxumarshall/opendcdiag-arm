@@ -154,6 +154,12 @@ build_one() {
             # 镜像真在本地?(manifest 说有但可能被 podman prune 了)
             if [ "$local_ok" = "yes" ] && podman image exists "$LOCAL_TAG" 2>/dev/null; then
                 echo "  skip:input-hash 未变 + 本地镜像存在($(image_size_mb "$LOCAL_TAG")MB)"
+                # 即便 skip,--tar 仍导出(用户要的是 tar 包,不是重建)
+                if [ "$TAR" = 1 ]; then
+                    mkdir -p "$SRC_ROOT/dist/images"
+                    local tarpath="$SRC_ROOT/dist/images/opendcdiag-offline-${series}-${SP_LABEL}.oci.tar"
+                    [ -f "$tarpath" ] || { echo "  导出 tar(skip): $tarpath"; podman save -o "$tarpath" "$LOCAL_TAG" 2>/dev/null || echo "  ⚠ save 失败" >&2; }
+                fi
                 return 0
             fi
             echo "  manifest 有记录但本地镜像缺失 → 重建"
