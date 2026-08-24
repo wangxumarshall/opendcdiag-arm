@@ -1,5 +1,121 @@
 # OpenDCDiag-ARM
-OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework. 
+OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework.
+
+## Prebuilt binaries by openEuler version (`third-party/rpms`)
+
+OpenDCDiag-ARM ships **prebuilt `opendcdiag` binaries for every openEuler LTS/SP
+release from 20.03 through 24.03**, so you can run the tool on a target machine
+without compiling. They live in `third-party/rpms/`, which aggregates three git
+submodules — one per major version (split to stay under git's single-pack 2 GB
+limit):
+
+| Submodule dir | Remote repo | Releases covered |
+|---|---|---|
+| `third-party/rpms/openEuler-20.03/` | [opendcdiag-arm-rpm-20.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-20.03) | 20.03 LTS / SP1 / SP2 / SP3 / SP4 |
+| `third-party/rpms/openEuler-22.03/` | [opendcdiag-arm-rpm-22.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-22.03) | 22.03 LTS / SP1 / SP2 / SP3 / SP4 |
+| `third-party/rpms/openEuler-24.03/` | [opendcdiag-arm-rpm-24.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-24.03) | 24.03 LTS / SP1 / SP2 / SP3 / SP4 (SP3 = build baseline) |
+
+> **Clone with submodules** to fetch the RPM trees:
+> ```bash
+> git clone --recurse-submodules <repo-url>
+> # or, in an existing checkout:
+> git submodule update --init --recursive third-party/rpms/
+> ```
+
+### Layout of each release
+
+Each release has its own directory under its series, named
+`openEuler-<series>LTS[_SPx]` (e.g. `openEuler-24.03LTS_SP3`). The directory holds:
+
+```
+third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/
+├── *.rpm                          # full dependency RPM tree for that OS version
+└── built/                         # ready-to-run artifacts (after packaging)
+    ├── opendcdiag                 # stripped binary, built for this exact OS version
+    ├── libs/                      # non-system runtime .so it needs (libatomic, toolset stdc++, ...)
+    └── run-opendcdiag.sh          # sets LD_LIBRARY_PATH=./libs then execs opendcdiag
+```
+
+**24.03 SP3 is the reference/baseline version.** Every other release ships the
+*same package-name set* plus its full dependency tree, downloaded against the
+24.03 SP3 baseline so results are comparable across versions (see
+`scripts/offline-build/download-all-versions.sh`).
+
+### Running the prebuilt binary for your OS version
+
+```bash
+# 1. Pick the directory matching your running openEuler version exactly.
+#    (SP must match — SP3 binaries don't run cleanly on SP4 and vice versa.)
+cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built
+
+# 2. Run via the wrapper (sets LD_LIBRARY_PATH to ./libs automatically):
+./run-opendcdiag.sh --list-tests
+./run-opendcdiag.sh -e zstd19 -t 5000 -n 1   # deterministic, avoids 192-core ULP flakiness
+./run-opendcdiag.sh --quality=0 -e arm64_sdc -t 5000
+```
+
+### Common commands (offline-build pipeline)
+
+All multi-version tooling lives in `scripts/offline-build/`. Three of them —
+`download-deps.sh`, `install-deps.sh`, `build.sh` — share `_common.sh`, which
+detects the running openEuler version (`detect_os_sp`, `detect_os_version_full`)
+and **refuses to install across SPs** by stamping/reading a `.os-version` tag
+file. The version-gated pipeline is the supported way to (re)build or verify
+binaries for a specific OS version.
+
+```bash
+cd /path/to/opendcdiag-arm
+cd scripts/offline-build/
+
+# --- A. Download RPM trees (on a machine WITH network, same OS version as target) ---
+./download-deps.sh                    # one version: detect THIS machine's SP, write .os-version tag
+                                       #   → output: ./opendcdiag-rpms/ (full dep tree)
+./download-all-versions.sh            # all LTS/SP releases at once vs the 24.03 SP3 baseline
+                                       #   → fills third-party/rpms/openEuler-{20,22,24}.03/*
+./supplement-20.03-gcc10.sh all       # 20.03 only: pull GCC-10 toolset + meson 0.59 into every 20.03 SP
+                                       #   (20.03 ships gcc-7; C++20/23 needs gcc-10 from SP4's repo)
+
+# --- B. Install dependencies offline (on the TARGET machine, NO network) ---
+#       Pass the matching release's RPM dir; version is checked against the target machine.
+./install-deps.sh ../../third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3
+
+# --- C. Native build on the target (deps already installed) ---
+./build.sh                            # meson setup + ninja + smoke check (zstd19 -n 1)
+
+# --- D. Container build per OS version (no host install needed; source mounted read-only) ---
+./container-build.sh 24.03 SP3        # → build-out/openEuler-24.03LTS_SP3/opendcdiag
+./container-build.sh 22.03 SP3        # 22.03: injects -DOPENEULER_22_03 + C++23 polyfill header
+./container-build.sh 20.03 SP4        # 20.03: uses gcc-toolset-10, meson 0.59 source tree
+
+# --- E. Package the built binary into its release's built/ dir ---
+./package-built-artifacts.sh 24.03 SP3   # → third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built/
+
+# --- F. Verify the packaged binary runs in a pristine container (only built/ mounted) ---
+./verify-built-pristine.sh 24.03 SP3        # full suite; eigen tests run -n 1
+./verify-built-pristine.sh 24.03 SP3 smoke  # quick: --list-tests + zstd19 only
+
+# --- G. Run the full test suite inside the build container ---
+./run-full-tests.sh 24.03 SP3              # reuse build-out/ binary
+./run-full-tests.sh 24.03 SP3 build         # rebuild first, then test
+```
+
+> **Why SP must match.** `glibc-devel` from SP3 carries `Requires: glibc = <sp3-N>`;
+> installing it onto an SP4 box forces a downgrade of the protected `glibc` and
+> deadlocks. `install-deps.sh` reads the `.os-version` tag stamped at download
+> time and rejects the mismatch up front, pointing you to re-download on a
+> same-SP machine. This is enforced by `scripts/offline-build/_common.sh`.
+>
+> **22.03 / 20.03 adaptations are container-only.** Older toolchains (gcc-10,
+> meson 0.59/0.54, binutils 2.34) lack C++20/23 features. `container-build.sh`
+> mounts the source tree **read-only** and adapts on a throwaway copy:
+> `-include` of a `framework/compat/cpp23_polyfill.h` polyfill, CXXFLAGS
+> version macros (`OPENEULER_22_03` / `OPENEULER_20_03`), and `sed` patches
+> (e.g. `string::contains` → `.find()`, `udf` → `.inst`). The host source tree
+> is never modified — the x86 / 24.03 reference stays untouched.
+
+For the full dependency breakdown and pitfalls, see
+[docs/offline-build-dependencies.md](docs/offline-build-dependencies.md).
+
 ## Building OpenDCDiag-ARM
 ### Prerequisites
 #### openEuler
