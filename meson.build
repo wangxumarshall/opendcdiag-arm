@@ -11,7 +11,11 @@ project(
         'c_std=gnu17',
         'cpp_std=gnu++23',
     ],
-    meson_version : '>=1.3',
+    # Lowest meson that supports meson.project_source_root() (used in
+    # framework/meson.build), introduced in 0.56. openEuler 22.03 ships 0.59;
+    # 20.03 uses the vendored third-party/meson/meson-0.59.4 (0.59); 24.03
+    # ships 1.3+. All satisfy >=0.56, so no container-side sed relax needed.
+    meson_version : '>=0.56',
 )
 
 cc = meson.get_compiler('c')

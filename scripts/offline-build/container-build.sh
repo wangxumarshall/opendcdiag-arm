@@ -17,7 +17,9 @@
 #       -DOPENEULER_22.03 (或 OPENEULER_20.03)
 #       -include /src/framework/compat/cpp23_polyfill.h   # polyfill,不改既有源码
 #       (meson 的 -Dcpp_std=gnu++20 命令行覆盖,不改 meson.build)
-#   - meson_version >=1.3 约束: 在容器内构建副本上 sed 临时放宽,host 源码不动。
+#       -Denable_acl=disabled (22.03/20.03 ACL ABI 不兼容,见 meson_options.txt)
+#   - meson_version:源码已声明 >=0.56(22.03 0.59 与 20.03 vendored 0.59.4 均满足),
+#     无需 sed 放宽。
 #   - 产物拷出到 host: build-out/openEuler-XX.03LTS_SPx/ (bin + log + ldd清单)。
 #
 # SPDX-License-Identifier-Identifier: Apache-2.0
@@ -140,17 +142,12 @@ for cmd in gcc g++ meson ninja perl python3 pkg-config ar; do
 done
 
 echo "===== [3/5] meson setup ====="
-# 把只读 /src 拷一份到可写 /build/src,以便对 meson.build 做临时 sed(放宽 meson_version)
-# — host 源码不被改动(只读挂载)。
+# 把只读 /src 拷一份到可写 /build/src(供 meson setup 用,不再 sed 改源码)。
 cp -a "$SRC" "$BUILD/src"
 SRCW="$BUILD/src"
 
-# 放宽 meson_version >=1.3 → >=0.59 (22.03/20.03 的 meson 是 0.59/0.54)
-# 用 perl 精确替换,避免误伤。
-if ! perl -0pi -e "s/meson_version\s*:\s*'>=1\.3'/meson_version : '>=0.59'/" "$SRCW/meson.build"; then
-    echo "warn: perl sed meson_version failed" >&2
-fi
-grep -n "meson_version" "$SRCW/meson.build" | head -1
+# meson_version:源码已声明 >=0.56(project_source_root 引入版,22.03 的 0.59 与
+# 20.03 vendored 0.59.4 均满足),无需再 sed 放宽。
 
 # udf 助记符:源码已用 .inst 0x00001234(.inst 伪指令,新旧 binutils 统一支持,
 # 同 UDF #0x1234 编码,同 SIGILL)。无需再 sed-patch。见 selftest.cpp 注释。
