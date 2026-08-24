@@ -1,0 +1,6 @@
+# .containerignore — podman build 时排除 RPM 子目录里的非构建输入。
+# build context = 该 SP 的 RPM 子目录(third-party/rpms/openEuler-XX.03/openEuler-XX.03LTS_SPx/),
+# 其中混有 built/(上一轮构建产物,数十 MB)和 .os-version(标记文件)。二者都不该进镜像层。
+built/
+.os-version
+*.log
