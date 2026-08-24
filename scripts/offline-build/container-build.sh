@@ -65,43 +65,54 @@ SRC="/src"
 BUILD="/build"
 OUT="/out"
 
-echo "===== [1/5] 离线安装依赖 ($RPMDIR) ====="
-# 最小镜像缺 find, 先用 rpm 直装 findutils (--nodeps, 依赖已在镜像)。
-FINDUTILS_RPM=$(ls "$RPMDIR"/findutils-*.rpm 2>/dev/null | head -1 || true)
-if [ -n "$FINDUTILS_RPM" ] && ! command -v find >/dev/null 2>&1; then
-    echo "  预装 findutils (镜像缺 find)..."
-    rpm -Uvh --nodeps --force "$FINDUTILS_RPM" >/dev/null 2>&1 || true
-fi
-command -v find >/dev/null 2>&1 || { echo "ERROR: find 仍不可用" >&2; exit 1; }
-
 # 创建构建工作目录 (容器内可写) + /var/tmp (最小镜像缺, rpm %trigger 脚本需要)
 mkdir -p "$BUILD" "$OUT" /var/tmp /tmp
 
-# 容器是最小化 KIWI 镜像, 系统包(util-linux/libuuid 等)版本与 RPM 树来源子版本号
-# 略有差异(如 -31 vs -39), dnf 的精确版本依赖会触发 "protected dnf" 死结。
-# 容器是可丢弃环境, 用 rpm --nodeps --force 直接强装整棵依赖树(等价于
-# install-deps.sh 的兜底方案 4), 依赖物理上都在 RPM 树里, 强装后能正常工作。
-EXCLUDE_RE='grub2|shim|mokutil|efivar|dracut|kpartx|fuse|glibc$|glibc-common|glibc-headers|glibc-static|systemd$|systemd-libs|systemd-udev|setup$|filesystem$|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg|openEuler-repos'
-KEEP=$(find "$RPMDIR" -maxdepth 1 -name '*.rpm' | grep -ivE "$EXCLUDE_RE")
-echo "  强装 $(echo "$KEEP" | wc -l) 个 RPM (--nodeps --force)..."
-rpm -Uvh --nodeps --force $KEEP >/tmp/rpm-install.log 2>&1 || true
+# ===== 杠杆 1: 镜像已烘焙依赖则跳过安装 =====
+# 由 build-images.sh 构建的镜像(localhost/openeuler-offline:...)在镜像层里已
+# rpm -Uvh --nodeps --force 装完整棵依赖树 + 建 ld 链接(见 Containerfile.template)。
+# 检测信号: 镜像自带 find + gcc → deps 已就绪, 跳过 [1/5] 整段安装, 直接进 toolset 激活。
+# (20.03 的 /usr/bin/gcc 可能是 gcc-7 或缺失, 但 toolset 激活块会用 /opt/.../gcc-10
+#  覆盖 PATH/CC/CXX; 那是"怎么用 deps"不是"装 deps", 仍要跑。故此处只判 find。)
+if command -v find >/dev/null 2>&1; then
+    echo "===== [1/5] 依赖已就绪(镜像烘焙) — 跳过安装 ====="
+    echo "  gcc: $(gcc --version 2>/dev/null | head -1 || echo 'toolset 激活后见下')"
+else
+    echo "===== [1/5] 离线安装依赖 ($RPMDIR) ====="
+    # 最小镜像缺 find, 先用 rpm 直装 findutils (--nodeps, 依赖已在镜像)。
+    FINDUTILS_RPM=$(ls "$RPMDIR"/findutils-*.rpm 2>/dev/null | head -1 || true)
+    if [ -n "$FINDUTILS_RPM" ] && ! command -v find >/dev/null 2>&1; then
+        echo "  预装 findutils (镜像缺 find)..."
+        rpm -Uvh --nodeps --force "$FINDUTILS_RPM" >/dev/null 2>&1 || true
+    fi
+    command -v find >/dev/null 2>&1 || { echo "ERROR: find 仍不可用" >&2; exit 1; }
 
-# 大批量 --nodeps --force 会因文件冲突静默跳过部分关键包(如 glibc-devel 提供
-# crt1.o, binutils 提供 ld)。显式重装这几个关键包, 保证 toolset gcc 能链接。
-# 注: 某些包(如 glibc-headers)在 20.03 不存在, ls 无匹配会非零退出 → 用 || true
-# 兜底, 否则 set -e 会中断脚本。
-for mustpkg in glibc-devel glibc-headers binutils gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ gcc-toolset-10-libstdc++-devel gcc-toolset-10-libgcc; do
-    f=$(ls "$RPMDIR"/${mustpkg}-*.rpm 2>/dev/null | head -1) || true
-    [ -n "$f" ] && rpm -Uvh --nodeps --force "$f" >/dev/null 2>&1 || true
-done
-echo "  安装完成; gcc 版本: $(gcc --version 2>/dev/null | head -1 || echo MISSING)"
+    # 容器是最小化 KIWI 镜像, 系统包(util-linux/libuuid 等)版本与 RPM 树来源子版本号
+    # 略有差异(如 -31 vs -39), dnf 的精确版本依赖会触发 "protected dnf" 死结。
+    # 容器是可丢弃环境, 用 rpm --nodeps --force 直接强装整棵依赖树(等价于
+    # install-deps.sh 的兜底方案 4), 依赖物理上都在 RPM 树里, 强装后能正常工作。
+    EXCLUDE_RE='grub2|shim|mokutil|efivar|dracut|kpartx|fuse|glibc$|glibc-common|glibc-headers|glibc-static|systemd$|systemd-libs|systemd-udev|setup$|filesystem$|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg|openEuler-repos'
+    KEEP=$(find "$RPMDIR" -maxdepth 1 -name '*.rpm' | grep -ivE "$EXCLUDE_RE")
+    echo "  强装 $(echo "$KEEP" | wc -l) 个 RPM (--nodeps --force)..."
+    rpm -Uvh --nodeps --force $KEEP >/tmp/rpm-install.log 2>&1 || true
 
-# 20.03 + 22.03 的最小镜像缺 ld 符号链接: binutils 装了 ld.bfd 但
-# /usr/bin/ld → /etc/alternatives/ld 的 alternatives 链未建(--nodeps 跳了
-# %post 脚本依赖的 chkconfig/alternatives)。手动建直链, 让 collect2 找到 ld。
-if [ ! -e /usr/bin/ld ] && [ -e /usr/bin/ld.bfd ]; then
-    ln -sf /usr/bin/ld.bfd /usr/bin/ld
-    echo "  建 /usr/bin/ld → ld.bfd 符号链接"
+    # 大批量 --nodeps --force 会因文件冲突静默跳过部分关键包(如 glibc-devel 提供
+    # crt1.o, binutils 提供 ld)。显式重装这几个关键包, 保证 toolset gcc 能链接。
+    # 注: 某些包(如 glibc-headers)在 20.03 不存在, ls 无匹配会非零退出 → 用 || true
+    # 兜底, 否则 set -e 会中断脚本。
+    for mustpkg in glibc-devel glibc-headers binutils gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ gcc-toolset-10-libstdc++-devel gcc-toolset-10-libgcc; do
+        f=$(ls "$RPMDIR"/${mustpkg}-*.rpm 2>/dev/null | head -1) || true
+        [ -n "$f" ] && rpm -Uvh --nodeps --force "$f" >/dev/null 2>&1 || true
+    done
+    echo "  安装完成; gcc 版本: $(gcc --version 2>/dev/null | head -1 || echo MISSING)"
+
+    # 20.03 + 22.03 的最小镜像缺 ld 符号链接: binutils 装了 ld.bfd 但
+    # /usr/bin/ld → /etc/alternatives/ld 的 alternatives 链未建(--nodeps 跳了
+    # %post 脚本依赖的 chkconfig/alternatives)。手动建直链, 让 collect2 找到 ld。
+    if [ ! -e /usr/bin/ld ] && [ -e /usr/bin/ld.bfd ]; then
+        ln -sf /usr/bin/ld.bfd /usr/bin/ld
+        echo "  建 /usr/bin/ld → ld.bfd 符号链接"
+    fi
 fi
 
 # 20.03: gcc-10 以 SCL gcc-toolset-10 形式安装(在 /opt/openEuler/gcc-toolset-10/root/)。
