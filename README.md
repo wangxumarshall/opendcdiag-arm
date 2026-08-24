@@ -12,9 +12,9 @@ OpenDCDiag-ARM is an open-source project designed to identify defects and bugs i
 
 | 子模块目录 | 覆盖版本 |
 |---|---|
-| `third-party/rpms/openEuler-20.03/` | 20.03 LTS / SP1–SP4 |
-| `third-party/rpms/openEuler-22.03/` | 22.03 LTS / SP1–SP4 |
-| `third-party/rpms/openEuler-24.03/` | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
+| [`third-party/rpms/openEuler-20.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-20.03.git) | 20.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-22.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-22.03.git) | 22.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-24.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-24.03.git) | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
 
 ```bash
 git clone --recurse-submodules <repo-url>   # 含子模块
