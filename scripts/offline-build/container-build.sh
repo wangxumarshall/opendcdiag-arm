@@ -152,27 +152,12 @@ if ! perl -0pi -e "s/meson_version\s*:\s*'>=1\.3'/meson_version : '>=0.59'/" "$S
 fi
 grep -n "meson_version" "$SRCW/meson.build" | head -1
 
-# 20.03 binutils-2.34 不认 `udf` 助记符 (selftest.cpp:960 的 asm volatile("udf #0x1234"))
-# — 旧 as 报 "unknown mnemonic udf"。把 udf #0x1234 替换为等价的 .inst 0x00001234
-# (同编码, 旧 as 支持 .inst 伪指令)。仅 20.03, host 源码不动。22.03 的 binutils
-# 较新, 认 udf, 不动。
-if [ "${OPENEULER_MACRO:-}" = "OPENEULER_20_03" ]; then
-    perl -pi -e 's/"udf #0x1234"/".inst 0x00001234"/' "$SRCW/framework/selftest.cpp" 2>/dev/null || true
-    echo "  sed-patch udf→.inst 完成 (20.03)"
-fi
+# udf 助记符:源码已用 .inst 0x00001234(.inst 伪指令,新旧 binutils 统一支持,
+# 同 UDF #0x1234 编码,同 SIGILL)。无需再 sed-patch。见 selftest.cpp 注释。
 
-# 22.03/20.03 (GCC 10) 缺 std::string/string_view::contains (C++23, P1679)。
-# 在容器副本上 patch 3 个调用点为 .find() 比较 (host 源码不动):
-#   sandstone_utils.cpp:325  !r.contains('.')  → r.find('.') == std::string::npos
-#   sandstone_utils.cpp:341  v.contains('\n')   → v.find('\n') != std::string_view::npos
-#   sandstone_opts.cpp:786    std::string_view{elem}.contains(',') → .find(',')!=npos
-# 注: std::map::contains (C++20) GCC10 已支持, 不动; 仅 string/string_view::contains 缺。
-if [ -n "${OPENEULER_MACRO:-}" ]; then
-    perl -pi -e "s/if \(!r\.contains\('\\.'\)\)/if (r.find('.') == std::string::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
-    perl -pi -e "s/if \(v\.contains\('\\\\n'\)\)/if (v.find('\\\\n') != std::string_view::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
-    perl -pi -e "s/std::string_view\{elem\}\.contains\(','\)/(std::string_view{elem}.find(',') != std::string_view::npos)/" "$SRCW/framework/sandstone_opts.cpp" 2>/dev/null || true
-    echo "  sed-patch .contains()→.find() 完成"
-fi
+# std::string/string_view::contains (C++23, GCC10 缺):源码 3 个调用点已改为
+# 可移植的 .find()==npos 比较(C++17, GCC10/12 通用)。无需再 sed-patch。
+# 注: std::map::contains (C++20) GCC10 已支持, 不在涉及范围内。
 
 # ACL (Arm Compute Library) 头库版本不匹配: host 头是 ACL v22.11 (GCC12 libstdc++),
 # 22.03 原生库是 v20.02 (GCC10 libstdc++), ABI 不兼容, 且 fisttp_arm 链接失败

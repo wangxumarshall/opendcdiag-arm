@@ -957,7 +957,11 @@ static void cause_sigill()
     double d2 = std::numeric_limits<double>::quiet_NaN();
     uint8x16_t v0 = vdupq_n_u8(0x42);
     uint64x2_t v1 = vdupq_n_u64(0xdeadbeefULL);
-    asm volatile("udf #0x1234"
+    /* Use the .inst pseudo-op (literal encoding of UDF #0x1234) rather than the
+     * `udf` mnemonic: older binutils (openEuler 20.03 ships 2.34) rejects `udf`
+     * as "unknown mnemonic", while .inst is supported uniformly across all
+     * binutils versions. Same machine encoding, same SIGILL. */
+    asm volatile(".inst 0x00001234"
                  :
                  : "x"(local_thread_num), "x"(rnd), "x"(errno_location),
                    "w"(d1), "w"(d2), "w"(v0), "w"(v1)
