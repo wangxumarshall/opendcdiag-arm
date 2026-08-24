@@ -20,7 +20,10 @@ OpenDCDiag-ARM is an open-source project designed to identify defects and bugs i
 git clone --recurse-submodules <repo-url>   # 含子模块
 cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built
 ./run-opendcdiag.sh --list-tests            # 自动设 LD_LIBRARY_PATH=./libs
-./run-opendcdiag.sh -e zstd19 -t 5000 -n 1   # 单线程，规避大核数 ULP 数值 flakiness
+./run-opendcdiag.sh -T forever -t 60s -Y -F                # 首次检测到SDC后，停止 
+./run-opendcdiag.sh -T forever -t 60s -Y -ignore-timeout   # 一起跑，就算检测到SDC后，也一直往后跑
+./run-opendcdiag.sh -T forever -t 600s -Y -e "fma*" -e "eigen_svd*" -e "eigen_gemm*" -e "zstd*" -e "zlib*" 
+./run-opendcdiag.sh -t 60s -n 1 -e zstd19 # 单线程，规避大核数 ULP 数值 flakiness
 ```
 
 > **SP 必须与目标机一致**：SP3 的 `glibc-devel` 携带 `Requires: glibc = <sp3-N>`，装到 SP4 会触发受保护 `glibc` 降级死结。`install-deps.sh` 通过 `.os-version` 标记在安装前拦截错配。
