@@ -159,18 +159,15 @@ grep -n "meson_version" "$SRCW/meson.build" | head -1
 # 可移植的 .find()==npos 比较(C++17, GCC10/12 通用)。无需再 sed-patch。
 # 注: std::map::contains (C++20) GCC10 已支持, 不在涉及范围内。
 
-# ACL (Arm Compute Library) 头库版本不匹配: host 头是 ACL v22.11 (GCC12 libstdc++),
-# 22.03 原生库是 v20.02 (GCC10 libstdc++), ABI 不兼容, 且 fisttp_arm 链接失败
-# (undefined GLIBCXX_3.4.29/3.4.30)。在 22.03/20.03 容器副本上把 arithmetic_arm
-# 的 ACL 子集置空: acl_sources → [], acl_dep → declare_dependency() 空 (不链 -larm_compute),
-# 使 acl_tests_lib 静态库为空且不拉 ACL 库。2 个 ACL 测试 (acl_gemm 本就 EXIT_SKIP,
-# fisttp_arm 依赖 ACL) 从 22.03/20.03 构建里跳过; GMP/compiler-rt 子集保留。host 源码不动。
+# ACL (Arm Compute Library) 收敛:用 meson option -Denable_acl 替代 sed 改源码。
+# 22.03/20.03 的 ACL 原生库是 v20.02 (GCC10 libstdc++), 与 host 头 (v22.11,
+# GCC12) ABI 不兼容, fisttp_arm 链接失败 (undefined GLIBCXX_3.4.29/3.4.30)。
+# 故 22.03/20.03 传 -Denable_acl=disabled (meson.build 里 acl_sources=[] 空库,
+# 不链 -larm_compute, 跳过 2 ACL 测试)。24.03 不传 = auto (host 有 ACL 则构建)。
+ACL_OPT=""
 if [ -n "${OPENEULER_MACRO:-}" ]; then
-    AMESON="$SRCW/tests/cpu/arithmetic_arm/meson.build"
-    perl -0pi -e "s/acl_sources = files\(\s*'acl_gemm\.cpp',\s*'fisttp_arm\.cpp',\s*\)/acl_sources = []/s" "$AMESON" 2>/dev/null || true
-    # 把 acl_dep 的 declare_dependency(...) 调用整体改成空 declare_dependency()
-    perl -0pi -e "s/acl_dep = declare_dependency\(\s*compile_args : \[.*?\],\s*link_args\s*: \[.*?\],\s*\)/acl_dep = declare_dependency()/s" "$AMESON" 2>/dev/null || true
-    echo "  sed-patch ACL 子集置空完成 (22.03/20.03 跳过 2 ACL 测试)"
+    ACL_OPT="-Denable_acl=disabled"
+    echo "  ACL: -Denable_acl=disabled (22.03/20.03 跳过 2 ACL 测试)"
 fi
 
 # CXXFLAGS 注入 polyfill 头 + 版本宏 + compat/ 系统头路径 (只对 22.03/20.03;24.03 不注入)
@@ -194,7 +191,7 @@ export CPPSTD="${CPPSTD:-gnu++23}"
 
 rm -rf "$BUILD/builddir"
 meson_setup() { ${MESON_BIN:-meson} "$@"; }
-meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" ${EXTRA_MESON_ARGS:-}
+meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" $ACL_OPT ${EXTRA_MESON_ARGS:-}
 
 echo "===== [4/5] ninja ====="
 ninja -C "$BUILD/builddir"
@@ -230,18 +227,19 @@ case "$SERIES" in
 esac
 
 # extra meson args (数组转空格串)
-EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
-
 echo "==> 启动 podman 容器构建..."
-# ACL(arithmetic_arm 测试)在 meson.build 里硬编码了 host 路径:
+# ACL(arithmetic_arm 测试)的 host 路径(bind 挂到同名位置, meson 用 -Dacl_incdir 找):
 #   - 头: /home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include
 #   - 库: /usr/lib64/libarm_compute.so
 #   - clang-rt builtins: /usr/lib/clang/17/lib/aarch64-openEuler-linux-gnu/libclang_rt.builtins.a
-# 容器内把这些 host 路径只读 bind 挂到同名位置,使未修改的 meson.build 能找到。
 # 仅当 host 上存在时挂载(24.03 容器镜像 == host 同 SP, 这些路径有效)。
+# 24.03 传 -Dacl_incdir=<host path> 让 meson auto 找到 ACL 头;22.03/20.03 容器内
+# 传 -Denable_acl=disabled(见 inner-build.sh)。
 ACL_HDR="/home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include"
 ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
+[ -d "$ACL_HDR" ] && EXTRA_MESON+=("-Dacl_incdir=$ACL_HDR")
+EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
 MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$SRC_ROOT/build-out/inner-build.sh:$INNER:ro")
 # 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)。
 # 源码包入仓 third-party/meson/meson-0.59.4(11M, 纯源码, 可复现)。
