@@ -1,0 +1,74 @@
+# Containerfile.template — 烘焙构建依赖的镜像层(方案 2:镜像入 Registry,不入 git)。
+#
+# 由 build-images.sh <series> <sp> 参数化构建:
+#     podman build -f Containerfile.template \
+#         --build-arg SERIES=24.03 --build-arg SP_TAG=24.03-lts-sp3 \
+#         --build-arg OPENEULER_MACRO=  (22.03/20.03 传 OPENEULER_22_03 / OPENEULER_20_03)
+#         <rpmdir>      ← build context = 该 SP 的 RPM 子目录
+#
+# 设计(对齐 container-build.sh:68-105 的依赖安装逻辑,固化为镜像层):
+#   - FROM quay.io/openeuler/openeuler:<sp-tag>:公共 minimal 镜像,提供该 SP 精确的 glibc/系统库。
+#     (quay 有按 SP 粒度的 tag: 24.03-lts-sp3 / 22.03-lts-sp3 / 20.03-lts-sp4 ...;非 SP 系列 tag)
+#   - COPY *.rpm:该 SP 的完整 RPM 依赖树(来自 RPM submodule)。
+#   - RUN rpm -Uvh --nodeps --force:强装构建依赖,排除 bootloader/固件/系统核心
+#     (等价 container-build.sh 的 EXCLUDE_RE),并把关键包(glibc-devel/binutils/toolset)显式重装。
+#   - 镜像只保证"deps 物理就位";20.03 toolset 的 PATH/CC/CXX 激活是"怎么用 deps",
+#     仍由 container-build.sh 在构建期注入 env,不进镜像 RUN。
+#
+# 收敛目标:此镜像构建一次后,container-build.sh 每次源码构建跳过整段依赖安装(杠杆 1)。
+# SPDX-License-Identifier-Identifier: Apache-2.0
+
+# ARG SP_TAG: quay SP 粒度 tag (如 24.03-lts-sp3)。base 镜像提供该 SP 的 glibc。
+ARG SP_TAG
+FROM quay.io/openeuler/openeuler:${SP_TAG}
+
+# 其余 ARG 仅供 RUN 层的条件分支与元信息;OPENEULER_MACRO 空 = 24.03,否则 22_03/20_03
+ARG SERIES
+ARG SP
+ARG OPENEULER_MACRO
+
+# 1) COPY 该 SP 的 RPM 树(build context = RPM 子目录,.containerignore 已排除 built/ 与 .os-version)
+COPY *.rpm /rpms/
+
+# 2) 预装 findutils(最小镜像缺 find;后续 RUN 的 find 命令依赖它)
+#    --nodeps --force:依赖物理上都在 RPM 树(镜像系统库已提供),强装可用。
+RUN rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true \
+    && command -v find >/dev/null 2>&1
+
+# 3) 强装依赖树。EXCLUDE_RE 与 container-build.sh:84 完全一致:
+#    排除 bootloader/固件/initramfs 链/系统核心(openEuler-release 等),只装构建必需包。
+#    最小镜像的系统包版本与 RPM 树来源子版本号略有差异,dnf 精确版本依赖会触发
+#    "protected dnf"死结;容器是可丢弃环境,用 rpm --nodeps --force 直接强装整棵依赖树
+#    (等价 install-deps.sh 的兜底方案 4),依赖物理上都在 RPM 树,强装后能正常工作。
+RUN KEEP=$(find /rpms -maxdepth 1 -name '*.rpm' | \
+        grep -ivE 'grub2|shim|mokutil|efivar|dracut|kpartx|fuse|glibc$|glibc-common|glibc-headers|glibc-static|systemd$|systemd-libs|systemd-udev|setup$|filesystem$|basesystem|shadow|pam|crypto-policies|openEuler-release|openEuler-gpg|openEuler-repos') \
+    && echo "强装 $(echo "$KEEP" | wc -l) 个 RPM (--nodeps --force)..." \
+    && rpm -Uvh --nodeps --force $KEEP >/tmp/rpm-install.log 2>&1 || true
+
+# 4) 显式重装关键包:大批量 --nodeps --force 会因文件冲突静默跳过部分关键包
+#    (glibc-devel 提供 crt1.o,binutils 提供 ld,toolset 提供 gcc/g++)。显式重装保证链接。
+#    某些包(如 glibc-headers)在 20.03 不存在,ls 无匹配会非零退出 → || true 兜底。
+RUN for mustpkg in glibc-devel glibc-headers binutils \
+                   gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ \
+                   gcc-toolset-10-libstdc++-devel gcc-toolset-10-libgcc; do \
+        f=$(ls /rpms/${mustpkg}-*.rpm 2>/dev/null | head -1); \
+        [ -n "$f" ] && rpm -Uvh --nodeps --force "$f" >/dev/null 2>&1 || true; \
+    done
+
+# 5) 建 ld 符号链接:20.03/22.03 最小镜像的 binutils 装了 ld.bfd 但
+#    /usr/bin/ld → /etc/alternatives/ld 的 alternatives 链未建(--nodeps 跳了
+#    %post 脚本依赖的 chkconfig/alternatives)。手动建直链,让 collect2 找到 ld。
+RUN [ ! -e /usr/bin/ld ] && [ -e /usr/bin/ld.bfd ] \
+    && ln -sf /usr/bin/ld.bfd /usr/bin/ld || true
+
+# 6) 自检:打印关键工具版本,供 build-images.sh 解析确认镜像就绪。
+#    gcc 在 24.03 是 /usr/bin/gcc(12.x);20.03 是 toolset 的 gcc-10(在 /opt/openEuler/...,
+#    未激活 PATH 时 /usr/bin/gcc 可能是 7.3 或缺失 — container-build.sh 负责激活)。
+RUN echo "===== image self-check =====" \
+    && for cmd in gcc g++ meson ninja perl python3 pkg-config ar find; do \
+        printf "  %-9s %s\n" "$cmd" "$(command -v $cmd >/dev/null 2>&1 && $cmd --version 2>/dev/null | head -1 || echo MISSING)"; \
+    done \
+    && echo "  OPENEULER_MACRO=${OPENEULER_MACRO:-(none)}" \
+    && echo "===== self-check done ====="
+
+# 镜像语义:启动即"依赖就绪",container-build.sh 挂源码进 /src 后直接 meson setup。

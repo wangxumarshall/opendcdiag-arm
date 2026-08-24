@@ -1,0 +1,4 @@
+# image-manifest.tsv — 容器镜像构建追溯表。列说明:
+# sp-tag | input-hash | containerfile-sha | rpm-pin | macro | quay-base | image-digest | local? | remote? | built-date | size-MB
+# 由 build-images.sh 自动维护。input-hash 变化触发重建。
+sp-tag	input-hash	containerfile-sha	rpm-pin	macro	quay-base	image-digest	local	remote	built-date	size-MB
