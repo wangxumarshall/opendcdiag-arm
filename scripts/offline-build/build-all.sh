@@ -7,8 +7,8 @@
 # 杠杆 2:构建产 built/BUILD-HASH,内容 = 影响二进制输出的输入哈希。
 #   稳态下改一行 sandstone.cpp,只有源码确实变的 SP 重建,其余复用 built/。
 #   哈希输入:源码树(framework/ tests/ meson.build meson_options.txt) +
-#   container-build.sh(含全部 sed 适配,改 sed 也触发重建) + cpp_std/macro +
-#   镜像 input-hash(基座变也重建)。全,不漏。
+#   container-build.sh(改适配逻辑也触发重建;sed 已收敛到源码/meson option) +
+#   cpp_std/macro + 镜像 input-hash(基座变也重建)。全,不漏。
 #
 # 杠杆 4:--since <ref> 用 git diff 选受影响 SP(与哈希 skip 叠加,双重过滤)。
 #
