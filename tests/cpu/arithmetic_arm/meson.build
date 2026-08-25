@@ -47,14 +47,40 @@ endif
 
 # ---------------------------------------------------------------------------
 # Arm Compute Library: libarm_compute.so lives in /usr/lib64 (default linker
-# search path); the C++ tensor/operator headers ship only under the
-# third-party arm-opt-install tree, so point the compile include there.
+# search path); the C++ tensor/operator headers ship only under a third-party
+# tree on the build host. Configured via -Denable_acl=auto|enabled|disabled and
+# -Dacl_incdir=/path (the header tree; empty = system default).
+# On 22.03/20.03 the ACL runtime is built against a newer libstdc++ (GLIBCXX_3.4.29+)
+# and won't link in the older toolchain; pass -Denable_acl=disabled there (the
+# container-build.sh driver does this via -D, no source sed needed).
+# When disabled (or auto + not found), acl_sources is empty and acl_dep is a
+# no-op declare_dependency(), so acl_tests_lib is an empty static lib that pulls
+# no ACL symbols — the 2 ACL tests simply aren't built.
 # ---------------------------------------------------------------------------
-acl_incdir = '/home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include'
-acl_dep = declare_dependency(
-    compile_args : ['-isystem', acl_incdir],
-    link_args    : ['-L/usr/lib64', '-larm_compute'],
-)
+acl_enable = get_option('enable_acl')
+acl_incdir_opt = get_option('acl_incdir')
+acl_lib = cc.find_library('arm_compute', dirs : ['/usr/lib64'], required : (acl_enable == 'enabled'))
+
+# auto: found iff the library is present AND headers are reachable (either a
+# user-specified -Dacl_incdir, or arm_compute/ in the system include path).
+acl_found = acl_lib.found()
+if acl_found and acl_incdir_opt == ''
+  acl_found = cc.has_header('arm_compute/arm.h', required : false)
+endif
+
+acl_incdir = acl_incdir_opt != '' ? acl_incdir_opt : '/usr/include'
+acl_sources = []
+acl_dep = declare_dependency()
+if acl_enable != 'disabled' and acl_found
+  acl_dep = declare_dependency(
+      compile_args : acl_incdir_opt != '' ? ['-isystem', acl_incdir] : [],
+      link_args    : ['-L/usr/lib64', '-larm_compute'],
+  )
+  acl_sources = files(
+      'acl_gemm.cpp',
+      'fisttp_arm.cpp',
+  )
+endif
 
 # ---------------------------------------------------------------------------
 # compiler-rt builtins: static soft-float integer implementation (__addsf3,
@@ -97,10 +123,7 @@ gmp_sources = files(
 # crashes (SIGSEGV @0x518) under sandstone's fork-per-iteration model until
 # fork-safety is fixed; the test is built and linked so the symbol is present
 # and reports a clean skip. fisttp_arm is a real ACL-backed test.
-acl_sources = files(
-    'acl_gemm.cpp',
-    'fisttp_arm.cpp',
-)
+# acl_sources is set above (empty when -Denable_acl=disabled or ACL not found).
 
 # 1 compiler-rt test: soft-float __addsf3/__mulsf3/__divsf3 vs golden.
 crt_sources = files(

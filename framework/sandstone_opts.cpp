@@ -783,7 +783,7 @@ struct ProgramOptionsParser {
             res.reserve(vec.size());
 
             for (const char* elem : vec) {
-                if (!std::string_view{elem}.contains(',')) { // is single name
+                if (std::string_view{elem}.find(',') == std::string_view::npos) { // is single name
                     res.emplace_back(elem);
                     continue;
                 }

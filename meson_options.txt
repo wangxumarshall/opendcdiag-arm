@@ -37,3 +37,12 @@ option('device_type', type: 'combo', choices : ['cpu', 'gpu', 'idxd'], value: 'c
     description : 'Device type for the build (default cpu).')
 option('target_device', type : 'string', value: 'bmg',
     description : 'Type of the device to be used for the build. Run `ocloc compile --help` for a full list of available device types. Defaults to "bmg". For SPIR-V intermediate format use "spirv".')
+# Arm Compute Library (ACL) for the arithmetic_arm tests (acl_gemm, fisttp_arm).
+# auto: build if libarm_compute + headers found (else skip, empty lib, no link).
+# enabled: require it (error if missing). disabled: never build the 2 ACL tests.
+# acl_incdir: where the arm_compute/ C++ headers live (host-specific third-party
+# tree; pass -Dacl_incdir=/path on the build machine). Empty = system default.
+option('enable_acl', type : 'combo', choices : ['auto', 'enabled', 'disabled'], value : 'auto',
+    description : 'Arm Compute Library tests in arithmetic_arm: auto/enabled/disabled (default auto).')
+option('acl_incdir', type : 'string', value : '',
+    description : 'Include dir for ACL C++ headers (arm_compute/ tree). Empty = system default.')

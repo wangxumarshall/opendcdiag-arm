@@ -40,9 +40,11 @@ mkdir -p "$OUT_HOST"
 run_in_pristine() {
     # 仅挂载 built/ 目录: 模拟下载后直接运行。无 host lib64, 无 build-out。
     # cwd 设为 /out(可写挂载), 让二进制默认日志写到那里(避免只读 /pkg 报错)。
+    # :Z 让 podman 给挂载点打 SELinux 私有标签(容器可 exec 二进制),否则
+    # SELinux enforcing 系统会 "Permission denied" 拒绝 exec host 挂载的二进制。
     timeout "${TIMEOUT:-540}" podman run --rm --user=0 \
-        -v "$BUILT_HOST:$BUILT:ro" \
-        -v "$OUT_HOST:/out" \
+        -v "$BUILT_HOST:$BUILT:ro,Z" \
+        -v "$OUT_HOST:/out:Z" \
         -w /out \
         "$IMG" bash -c "
             mkdir -p /var/tmp /tmp 2>/dev/null

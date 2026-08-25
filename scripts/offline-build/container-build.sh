@@ -17,7 +17,9 @@
 #       -DOPENEULER_22.03 (或 OPENEULER_20.03)
 #       -include /src/framework/compat/cpp23_polyfill.h   # polyfill,不改既有源码
 #       (meson 的 -Dcpp_std=gnu++20 命令行覆盖,不改 meson.build)
-#   - meson_version >=1.3 约束: 在容器内构建副本上 sed 临时放宽,host 源码不动。
+#       -Denable_acl=disabled (22.03/20.03 ACL ABI 不兼容,见 meson_options.txt)
+#   - meson_version:源码已声明 >=0.56(22.03 0.59 与 20.03 vendored 0.59.4 均满足),
+#     无需 sed 放宽。
 #   - 产物拷出到 host: build-out/openEuler-XX.03LTS_SPx/ (bin + log + ldd清单)。
 #
 # SPDX-License-Identifier-Identifier: Apache-2.0
@@ -54,8 +56,10 @@ echo "==> 产物输出(host): $OUTDIR_HOST"
 mkdir -p "$OUTDIR_HOST"
 
 # 容器内入口脚本:装依赖 + 构建 + 测试,所有产物落 /out (映射到 host OUTDIR)
+# inner-build.sh 用 SP-specific 路径(并发 worker 各自一份,避免覆盖竞态)。
 INNER=/tmp/inner-build.sh
-cat > "$SRC_ROOT/build-out/inner-build.sh" <<'INNER_EOF'
+INNER_HOST="$SRC_ROOT/build-out/inner-build-${OS_TAG}.sh"
+cat > "$INNER_HOST" <<'INNER_EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -140,52 +144,29 @@ for cmd in gcc g++ meson ninja perl python3 pkg-config ar; do
 done
 
 echo "===== [3/5] meson setup ====="
-# 把只读 /src 拷一份到可写 /build/src,以便对 meson.build 做临时 sed(放宽 meson_version)
-# — host 源码不被改动(只读挂载)。
+# 把只读 /src 拷一份到可写 /build/src(供 meson setup 用,不再 sed 改源码)。
 cp -a "$SRC" "$BUILD/src"
 SRCW="$BUILD/src"
 
-# 放宽 meson_version >=1.3 → >=0.59 (22.03/20.03 的 meson 是 0.59/0.54)
-# 用 perl 精确替换,避免误伤。
-if ! perl -0pi -e "s/meson_version\s*:\s*'>=1\.3'/meson_version : '>=0.59'/" "$SRCW/meson.build"; then
-    echo "warn: perl sed meson_version failed" >&2
-fi
-grep -n "meson_version" "$SRCW/meson.build" | head -1
+# meson_version:源码已声明 >=0.56(project_source_root 引入版,22.03 的 0.59 与
+# 20.03 vendored 0.59.4 均满足),无需再 sed 放宽。
 
-# 20.03 binutils-2.34 不认 `udf` 助记符 (selftest.cpp:960 的 asm volatile("udf #0x1234"))
-# — 旧 as 报 "unknown mnemonic udf"。把 udf #0x1234 替换为等价的 .inst 0x00001234
-# (同编码, 旧 as 支持 .inst 伪指令)。仅 20.03, host 源码不动。22.03 的 binutils
-# 较新, 认 udf, 不动。
-if [ "${OPENEULER_MACRO:-}" = "OPENEULER_20_03" ]; then
-    perl -pi -e 's/"udf #0x1234"/".inst 0x00001234"/' "$SRCW/framework/selftest.cpp" 2>/dev/null || true
-    echo "  sed-patch udf→.inst 完成 (20.03)"
-fi
+# udf 助记符:源码已用 .inst 0x00001234(.inst 伪指令,新旧 binutils 统一支持,
+# 同 UDF #0x1234 编码,同 SIGILL)。无需再 sed-patch。见 selftest.cpp 注释。
 
-# 22.03/20.03 (GCC 10) 缺 std::string/string_view::contains (C++23, P1679)。
-# 在容器副本上 patch 3 个调用点为 .find() 比较 (host 源码不动):
-#   sandstone_utils.cpp:325  !r.contains('.')  → r.find('.') == std::string::npos
-#   sandstone_utils.cpp:341  v.contains('\n')   → v.find('\n') != std::string_view::npos
-#   sandstone_opts.cpp:786    std::string_view{elem}.contains(',') → .find(',')!=npos
-# 注: std::map::contains (C++20) GCC10 已支持, 不动; 仅 string/string_view::contains 缺。
+# std::string/string_view::contains (C++23, GCC10 缺):源码 3 个调用点已改为
+# 可移植的 .find()==npos 比较(C++17, GCC10/12 通用)。无需再 sed-patch。
+# 注: std::map::contains (C++20) GCC10 已支持, 不在涉及范围内。
+
+# ACL (Arm Compute Library) 收敛:用 meson option -Denable_acl 替代 sed 改源码。
+# 22.03/20.03 的 ACL 原生库是 v20.02 (GCC10 libstdc++), 与 host 头 (v22.11,
+# GCC12) ABI 不兼容, fisttp_arm 链接失败 (undefined GLIBCXX_3.4.29/3.4.30)。
+# 故 22.03/20.03 传 -Denable_acl=disabled (meson.build 里 acl_sources=[] 空库,
+# 不链 -larm_compute, 跳过 2 ACL 测试)。24.03 不传 = auto (host 有 ACL 则构建)。
+ACL_OPT=""
 if [ -n "${OPENEULER_MACRO:-}" ]; then
-    perl -pi -e "s/if \(!r\.contains\('\\.'\)\)/if (r.find('.') == std::string::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
-    perl -pi -e "s/if \(v\.contains\('\\\\n'\)\)/if (v.find('\\\\n') != std::string_view::npos)/" "$SRCW/framework/sandstone_utils.cpp" 2>/dev/null || true
-    perl -pi -e "s/std::string_view\{elem\}\.contains\(','\)/(std::string_view{elem}.find(',') != std::string_view::npos)/" "$SRCW/framework/sandstone_opts.cpp" 2>/dev/null || true
-    echo "  sed-patch .contains()→.find() 完成"
-fi
-
-# ACL (Arm Compute Library) 头库版本不匹配: host 头是 ACL v22.11 (GCC12 libstdc++),
-# 22.03 原生库是 v20.02 (GCC10 libstdc++), ABI 不兼容, 且 fisttp_arm 链接失败
-# (undefined GLIBCXX_3.4.29/3.4.30)。在 22.03/20.03 容器副本上把 arithmetic_arm
-# 的 ACL 子集置空: acl_sources → [], acl_dep → declare_dependency() 空 (不链 -larm_compute),
-# 使 acl_tests_lib 静态库为空且不拉 ACL 库。2 个 ACL 测试 (acl_gemm 本就 EXIT_SKIP,
-# fisttp_arm 依赖 ACL) 从 22.03/20.03 构建里跳过; GMP/compiler-rt 子集保留。host 源码不动。
-if [ -n "${OPENEULER_MACRO:-}" ]; then
-    AMESON="$SRCW/tests/cpu/arithmetic_arm/meson.build"
-    perl -0pi -e "s/acl_sources = files\(\s*'acl_gemm\.cpp',\s*'fisttp_arm\.cpp',\s*\)/acl_sources = []/s" "$AMESON" 2>/dev/null || true
-    # 把 acl_dep 的 declare_dependency(...) 调用整体改成空 declare_dependency()
-    perl -0pi -e "s/acl_dep = declare_dependency\(\s*compile_args : \[.*?\],\s*link_args\s*: \[.*?\],\s*\)/acl_dep = declare_dependency()/s" "$AMESON" 2>/dev/null || true
-    echo "  sed-patch ACL 子集置空完成 (22.03/20.03 跳过 2 ACL 测试)"
+    ACL_OPT="-Denable_acl=disabled"
+    echo "  ACL: -Denable_acl=disabled (22.03/20.03 跳过 2 ACL 测试)"
 fi
 
 # CXXFLAGS 注入 polyfill 头 + 版本宏 + compat/ 系统头路径 (只对 22.03/20.03;24.03 不注入)
@@ -209,7 +190,7 @@ export CPPSTD="${CPPSTD:-gnu++23}"
 
 rm -rf "$BUILD/builddir"
 meson_setup() { ${MESON_BIN:-meson} "$@"; }
-meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" ${EXTRA_MESON_ARGS:-}
+meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPSTD" $ACL_OPT ${EXTRA_MESON_ARGS:-}
 
 echo "===== [4/5] ninja ====="
 ninja -C "$BUILD/builddir"
@@ -229,14 +210,14 @@ cp "$BIN" "$OUT/opendcdiag"
 ldd "$BIN" 2>/dev/null | awk '{print $1}' | sort -u > "$OUT/ldd-libs.txt" || true
 echo "===== 容器内构建完成 ====="
 INNER_EOF
-chmod +x "$SRC_ROOT/build-out/inner-build.sh"
+chmod +x "$INNER_HOST"
 
 # 决定注入宏与 cpp_std
 # 注: 宏名用 OPENEULER_22_03 / OPENEULER_20_03 (点号→下划线),因 C 预处理器宏标识符
 # 不允许含点号 ('.')。语义与目标意图一致,仅隔离 22.03/20.03 适配,不触碰 24.03。
 # 20.03 特殊: 系统自带 meson 0.54 + python3.7 太旧(meson 0.59 RPM 也跑不动,需
-# importlib.metadata / py3.8+)。故 20.03 用 meson 0.59.4 源码包(build-out/meson-0.59.4)
-# 直接 python3 meson.py 运行(纯 Python,兼容 py3.7)。
+# importlib.metadata / py3.8+)。故 20.03 用 meson 0.59.4 源码包(入仓
+# third-party/meson/meson-0.59.4, 纯 Python, 兼容 py3.7)直接 python3 meson.py 运行。
 case "$SERIES" in
     24.03) OEU_MACRO="";        CPPSTD="gnu++23"; MESON_BIN="meson" ;;
     22.03) OEU_MACRO="OPENEULER_22_03"; CPPSTD="gnu++20"; MESON_BIN="meson" ;;
@@ -245,22 +226,24 @@ case "$SERIES" in
 esac
 
 # extra meson args (数组转空格串)
-EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
-
 echo "==> 启动 podman 容器构建..."
-# ACL(arithmetic_arm 测试)在 meson.build 里硬编码了 host 路径:
+# ACL(arithmetic_arm 测试)的 host 路径(bind 挂到同名位置, meson 用 -Dacl_incdir 找):
 #   - 头: /home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include
 #   - 库: /usr/lib64/libarm_compute.so
 #   - clang-rt builtins: /usr/lib/clang/17/lib/aarch64-openEuler-linux-gnu/libclang_rt.builtins.a
-# 容器内把这些 host 路径只读 bind 挂到同名位置,使未修改的 meson.build 能找到。
 # 仅当 host 上存在时挂载(24.03 容器镜像 == host 同 SP, 这些路径有效)。
+# 24.03 传 -Dacl_incdir=<host path> 让 meson auto 找到 ACL 头;22.03/20.03 容器内
+# 传 -Denable_acl=disabled(见 inner-build.sh)。
 ACL_HDR="/home/sdc/root/arm64-sdc-fuzzing/third_party/arm-opt-install/include"
 ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
-MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$SRC_ROOT/build-out/inner-build.sh:$INNER:ro")
-# 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)
-[ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/build-out/meson-0.59.4" ] && \
-    MOUNTS+=(-v "$SRC_ROOT/build-out/meson-0.59.4:/meson-src:ro")
+[ -d "$ACL_HDR" ] && EXTRA_MESON+=("-Dacl_incdir=$ACL_HDR")
+EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
+MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$INNER_HOST:$INNER:ro")
+# 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)。
+# 源码包入仓 third-party/meson/meson-0.59.4(11M, 纯源码, 可复现)。
+[ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/third-party/meson/meson-0.59.4" ] && \
+    MOUNTS+=(-v "$SRC_ROOT/third-party/meson/meson-0.59.4:/meson-src:ro")
 [ -d "$ACL_HDR" ] && MOUNTS+=(-v "$ACL_HDR:$ACL_HDR:ro")
 [ -d "$ACL_LIB" ] && MOUNTS+=(-v "$ACL_LIB/libarm_compute.so:$ACL_LIB/libarm_compute.so:ro" -v "$ACL_LIB/libarm_compute_graph.so:$ACL_LIB/libarm_compute_graph.so:ro")
 [ -d "$CLANG_RT" ] && MOUNTS+=(-v "$CLANG_RT:$CLANG_RT:ro")

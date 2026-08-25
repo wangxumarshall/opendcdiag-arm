@@ -85,21 +85,28 @@ EOF
 }
 
 # 查 manifest 有无该 sp-tag 的 input-hash 记录。有则打印行,无则空。
+# 用共享锁(flock -s)串行化读,避免并发 worker 同时读旧 manifest 都判"无"→都重建。
 manifest_find() {
     local tag="$1" hash="$2"
-    manifest_ensure
-    grep -P "^${tag}\t${hash}\b" "$MANIFEST" 2>/dev/null | head -1 || true
+    (
+        flock -s 200
+        manifest_ensure
+        grep -P "^${tag}\t${hash}\b" "$MANIFEST" 2>/dev/null | head -1 || true
+    ) 200>"${MANIFEST}.lock"
 }
 
-# 追加/更新一行
+# 追加/更新一行。用 flock 串行化(build-all.sh 并发 worker 同时改 manifest 会丢更新)。
 manifest_set() {
     local tag="$1" hash="$2" cfsha="$3" pin="$4" macro="$5" quay="$6" digest="$7" local_ok="$8" remote_ok="$9" date_="${10}" size="${11}"
-    manifest_ensure
-    # 删旧(同 sp-tag 任意 hash),再追加新行
-    grep -vP "^${tag}\t" "$MANIFEST" > "$MANIFEST.tmp" || true
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$tag" "$hash" "$cfsha" "$pin" "$macro" "$quay" "$digest" "$local_ok" "$remote_ok" "$date_" "$size" >> "$MANIFEST.tmp"
-    mv "$MANIFEST.tmp" "$MANIFEST"
+    (
+        flock -x 200
+        manifest_ensure
+        # 删旧(同 sp-tag 任意 hash),再追加新行
+        grep -vP "^${tag}\t" "$MANIFEST" > "$MANIFEST.tmp" || true
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$tag" "$hash" "$cfsha" "$pin" "$macro" "$quay" "$digest" "$local_ok" "$remote_ok" "$date_" "$size" >> "$MANIFEST.tmp"
+        mv "$MANIFEST.tmp" "$MANIFEST"
+    ) 200>"${MANIFEST}.lock"
 }
 
 # ── 镜像体积估算(本地镜像,podman image inspect) ──
@@ -151,6 +158,12 @@ build_one() {
             # 镜像真在本地?(manifest 说有但可能被 podman prune 了)
             if [ "$local_ok" = "yes" ] && podman image exists "$LOCAL_TAG" 2>/dev/null; then
                 echo "  skip:input-hash 未变 + 本地镜像存在($(image_size_mb "$LOCAL_TAG")MB)"
+                # 即便 skip,--tar 仍导出(用户要的是 tar 包,不是重建)
+                if [ "$TAR" = 1 ]; then
+                    mkdir -p "$SRC_ROOT/dist/images"
+                    local tarpath="$SRC_ROOT/dist/images/opendcdiag-offline-${series}-${SP_LABEL}.oci.tar"
+                    [ -f "$tarpath" ] || { echo "  导出 tar(skip): $tarpath"; podman save -o "$tarpath" "$LOCAL_TAG" 2>/dev/null || echo "  ⚠ save 失败" >&2; }
+                fi
                 return 0
             fi
             echo "  manifest 有记录但本地镜像缺失 → 重建"
@@ -192,12 +205,16 @@ build_one() {
     if [ "$PUSH" = 1 ]; then
         echo "  推: $REMOTE_TAG"
         # 给镜像打远端 tag 并 push(需先 podman login ghcr.io,见下方提示)
-        if podman tag "$LOCAL_TAG" "$REMOTE_TAG" 2>/dev/null && podman push "$REMOTE_TAG" >/dev/null 2>&1; then
+        podman tag "$LOCAL_TAG" "$REMOTE_TAG" 2>/dev/null
+        # push 失败时打印真实 stderr(不吞),便于诊断(未登录/auth 错/token 权限)
+        if push_out=$(podman push "$REMOTE_TAG" 2>&1); then
             remote_ok="yes"
             # push 后 repoDigests 才有远端 digest
             digest=$(podman image inspect "$REMOTE_TAG" --format '{{range .RepoDigests}}{{.}}{{end}}' 2>/dev/null | sed 's#.*@##' | head -c 71 || echo "")
         else
-            echo "  ⚠ push 失败(未登录 ghcr.io? 跑: echo \$GH_TOKEN | podman login ghcr.io -u ${GHCR_USER} --password-stdin)" >&2
+            echo "  ⚠ push 失败:" >&2
+            echo "$push_out" | grep -iE "error|denied|unauthorized|login|not found" | head -3 >&2
+            echo "  (未登录? 跑: echo \$GHCR_TOKEN | podman login ghcr.io -u ${GHCR_USER} --password-stdin)" >&2
         fi
     fi
     [ -z "$digest" ] && digest=$(image_digest "$LOCAL_TAG")
@@ -260,5 +277,5 @@ if [ -z "$SP_ARG" ]; then
     # 只给 series → 构建该系列全部 SP
     for sp in $ALL_SP; do build_one "$SERIES_ARG" "$sp" || true; done
 else
-    build_one "$SERIES_ARG" "$SP_ARG"
+    build_one "$SERIES_ARG" "$SP_ARG" || exit 1
 fi

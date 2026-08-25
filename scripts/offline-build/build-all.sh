@@ -47,6 +47,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --smoke)    MODE="smoke"; shift ;;
         --full)     MODE="full";  shift ;;
+        --all)      SERIES_ARG="all"; SP_ARG="all"; shift ;;   # 全 15 SP
         --no-verify) NOVERIFY=1;  shift ;;
         --jobs)     JOBS="$2"; shift 2 ;;
         --since)    SINCE="$2"; shift 2 ;;
@@ -118,14 +119,14 @@ build_one() {
     echo ""
     echo "==================== $tag ===================="
 
+    # 杠杆 4:--since 过滤(先于镜像构建,避免无谓的 quay pull/image 检查)
+    if ! hit_by_since "$series"; then
+        echo "skip $tag (--since 未命中)"; echo "RESULT: SKIP $tag (--since)"; return 0
+    fi
+
     # 1) 镜像就绪(幂等:已烘焙则 skip)
     if ! "$SCRIPT_DIR/images/build-images.sh" "$series" "$sp" 2>&1; then
         echo "RESULT: FAIL $tag (image build)" >&2; return 1
-    fi
-
-    # 杠杆 4:--since 过滤
-    if ! hit_by_since "$series"; then
-        echo "skip $tag (--since 未命中)"; echo "RESULT: SKIP $tag (--since)"; return 0
     fi
 
     # 杠杆 2:哈希 skip 判定
@@ -150,12 +151,10 @@ build_one() {
     if ! "$SCRIPT_DIR/container-build.sh" "$series" "$sp" 2>&1; then
         echo "RESULT: FAIL $tag (source build)" >&2; return 1
     fi
-    # 4) 打包(写 BUILD-HASH 见 patch 6;此处兜底写)
+    # 4) 打包(含写 BUILD-HASH + MANIFEST + VERSION,见 package-built-artifacts.sh)
     if ! "$SCRIPT_DIR/package-built-artifacts.sh" "$series" "$sp" 2>&1; then
         echo "RESULT: FAIL $tag (package)" >&2; return 1
     fi
-    # 兜底写 BUILD-HASH(patch 6 会把此逻辑并入 package-built-artifacts.sh)
-    compute_build_hash "$series" "$sp" > "$builtdir/BUILD-HASH" 2>/dev/null || true
     # 5) 闸门
     if [ "$NOVERIFY" != 1 ]; then
         if ! "$SCRIPT_DIR/verify-built-pristine.sh" "$series" "$sp" "$MODE" 2>&1; then
@@ -166,17 +165,53 @@ build_one() {
 }
 
 # ── 执行矩阵 ────────────────────────────────────────────────────────
+# 杠杆 3:-P 并行。每个 SP 独立,用 xargs -P 并发。JOBS=1 退化为串行(等价 patch 前)。
+# 每个 worker 把结果写一行到结果文件 + stdout;主进程从结果文件汇总
+# (避免管道子 shell 变量隔离)。
 PASS_N=0; FAIL_N=0; SKIP_N=0; FAIL_TAGS=""
+RESULTS_DIR="$(mktemp -d)"
+trap 'rm -rf "$RESULTS_DIR"' EXIT
+
+# worker 脚本(被 BASH_ENV 注入):各函数定义 + main 调 build_one,结果写文件+stdout。
+WORKER_SCRIPT="$(mktemp)"
+{
+    declare -f build_one compute_build_hash hit_by_since
+    cat <<'WORKER_EOF'
+_worker_main() {
+    local series="$1" sp="$2" results_dir="$3"
+    local out result tag
+    tag="openEuler-${series}$(case "$sp" in LTS) echo LTS;; SP[1-4]) echo LTS_$sp;; esac)"
+    out=$(build_one "$series" "$sp" 2>&1) || true
+    result=$(echo "$out" | grep -oE 'RESULT: [A-Z]+ [^ ]+( [^ ]+)*' | tail -1)
+    [ -z "$result" ] && result="RESULT: FAIL ${tag} (no-result)"
+    echo "$result"                                    # stdout(实时可见)
+    echo "$result" > "${results_dir}/${tag}.result"  # 文件(汇总用)
+}
+WORKER_EOF
+} > "$WORKER_SCRIPT"
+export BASH_ENV="$WORKER_SCRIPT"
+export SCRIPT_DIR SRC_ROOT MODE NOVERIFY FORCE SINCE AFFECTED SERIES_LIST SP_LIST RESULTS_DIR
+
+# 展开目标列表为 "series sp" 对,用 xargs -P 并发
 for series in $SERIES_LIST; do
     for sp in $SP_LIST; do
-        out=$(build_one "$series" "$sp" 2>&1) || true
-        echo "$out" | grep -E "RESULT:|skip"
-        case "$(echo "$out" | grep -oE 'RESULT: [A-Z]+ ' | head -1)" in
-            "RESULT: PASS ") PASS_N=$((PASS_N+1)) ;;
-            "RESULT: SKIP ") SKIP_N=$((SKIP_N+1)) ;;
-            *) FAIL_N=$((FAIL_N+1)); FAIL_TAGS="$FAIL_TAGS ${series}-${sp}" ;;
-        esac
+        echo "${series} ${sp}"
     done
+done | xargs -P "$JOBS" -L1 bash -c '
+    _worker_main "$1" "$2" "$RESULTS_DIR" || echo "RESULT: FAIL openEuler-${1} (worker-exit)"
+' _ 2>&1 | grep -E "RESULT:|====" || true
+
+unset BASH_ENV; rm -f "$WORKER_SCRIPT"
+
+# 从结果文件汇总(不依赖管道子 shell)
+for rf in "$RESULTS_DIR"/*.result; do
+    [ -f "$rf" ] || continue
+    line=$(cat "$rf")
+    case "$(echo "$line" | grep -oE "RESULT: [A-Z]+ ")" in
+        "RESULT: PASS ") PASS_N=$((PASS_N+1)) ;;
+        "RESULT: SKIP ") SKIP_N=$((SKIP_N+1)) ;;
+        *) FAIL_N=$((FAIL_N+1)); FAIL_TAGS="$FAIL_TAGS $(echo "$line" | awk '{print $3}')" ;;
+    esac
 done
 
 echo ""

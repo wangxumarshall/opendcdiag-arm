@@ -322,7 +322,7 @@ struct FormatSimpleValue
             }
         } else {
             r = stdprintf("%.17g", v);
-            if (!r.contains('.'))
+            if (r.find('.') == std::string::npos)
                 r += ".0";
             pad_string();
             r += stdprintf(" # %a", v);
@@ -338,7 +338,7 @@ struct FormatSimpleValue
         }
         if (v.ends_with('\n'))
             v.remove_suffix(1);
-        if (v.contains('\n')) {
+        if (v.find('\n') != std::string_view::npos) {
             escape_multi_line(append_to, indent, v);
         } else {
             append_to += '\'';

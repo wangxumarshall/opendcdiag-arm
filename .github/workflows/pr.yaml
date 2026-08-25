@@ -191,3 +191,37 @@ jobs:
         shell: bash
         run: |
           ./builddir/unittests
+
+  # multi-version:在 openEuler 多版本容器里构建+纯净验证,作 polyfill/sed 适配层的
+  # 回归哨兵。PR 跑"角落三"(最老 toolchain + 基准),覆盖适配层被源码改动带歪的情况。
+  # 全 15 SP 的 full 验证留给 nightly/release(另 workflow)。
+  multi-version:
+    name: Multi-version (${{ matrix.series }}-${{ matrix.sp }})
+    needs: [ lint, git-sanity ]
+    runs-on: ubuntu-24.04-arm   # GitHub hosted arm64;换 self-hosted 见注释
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { series: "20.03", sp: "LTS" }   # 最老 toolchain(gcc-7+toolset-10),适配层哨兵
+        - { series: "22.03", sp: "SP3" }
+        - { series: "24.03", sp: "SP3" }   # 基准版本
+    steps:
+      - name: Checkout PR + submodules(RPM 树)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install podman
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman skopeo
+      - name: Build image + source + smoke-verify (corner three)
+        run: |
+          # build-all.sh:镜像就绪(幂等)→ 源码构建(杠杆1)→ 打包 → verify-pristine smoke
+          # 在 hosted runner 上首次会从 quay 拉 base + 烘焙 deps(~数分钟)。
+          # 换 self-hosted runner + ghcr.io 预构建镜像可跳过烘焙,详见 docs/multi-version-build-deploy.md §6。
+          ./scripts/offline-build/build-all.sh ${{ matrix.series }} ${{ matrix.sp }} --smoke
+      - name: Show result
+        if: ${{ always() }}
+        run: |
+          cat "third-party/rpms/openEuler-${{ matrix.series }}/openEuler-${{ matrix.series }}$(case ${{ matrix.sp }} in LTS) echo LTS;; SP*) echo LTS_${{ matrix.sp }};; esac)/built/VERSION" 2>/dev/null || true

@@ -47,8 +47,9 @@ if [ "$REBUILD" = "build" ] || [ ! -x "$BIN_HOST" ]; then
 fi
 [ -x "$BIN_HOST" ] || { echo "RESULT: FAIL no-binary" ; exit 2; }
 
-# 挂载: 二进制只读 + 结果目录可写 + 运行时库
-MOUNTS=(-v "$BIN_HOST:/bin/opendcdiag:ro" -v "$TEST_OUT_HOST:/out")
+# 挂载: 二进制只读 + 结果目录可写 + 运行时库。
+# :Z 打 SELinux 私有标签,否则 enforcing 系统拒绝 exec host 挂载的二进制。
+MOUNTS=(-v "$BIN_HOST:/bin/opendcdiag:ro,Z" -v "$TEST_OUT_HOST:/out:Z")
 LD_PATH=""
 if [ "$SERIES" = "24.03" ]; then
     MOUNTS+=(-v /usr/lib64:/usr/lib64:ro)
@@ -68,7 +69,7 @@ if [ "$SERIES" = "22.03" ] && [ ! -e "$LIBS_DIR/libatomic.so.1" ]; then
     fi
 fi
 if [ -d "$LIBS_DIR" ]; then
-    MOUNTS+=(-v "$LIBS_DIR:/opt/built-libs:ro"); LD_PATH="/opt/built-libs"
+    MOUNTS+=(-v "$LIBS_DIR:/opt/built-libs:ro,Z"); LD_PATH="/opt/built-libs"
 fi
 
 run_in_container() {
