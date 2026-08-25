@@ -44,7 +44,7 @@ ninja -C builddir
 
 ## 离线与多版本构建
 
-离线工具在 `scripts/offline-build/`，三个脚本（`download-deps.sh`/`install-deps.sh`/`build.sh`）共享 `_common.sh`，检测本机 openEuler SP 并用 `.os-version` 标记强制版本匹配。注：这条单机原生路径的 `_common.sh` 基线**硬编码 24.03**（`detect_os_version_full` 只对 24.03 SP 正确）；22.03/20.03 必须走下面的容器路径（D）。
+离线工具在 `scripts/offline-build/`。单机原生路径（`download-deps.sh`/`install-deps.sh`/`build.sh`，共享 `_common.sh`，用 `.os-version` 标记强制版本匹配）只支持 **24.03**——`_common.sh` 基线硬编码 `24.03LTS`，`detect_os_version_full` 对 22.03/20.03 会误报。22.03/20.03 必须走容器路径（D）。
 
 ```bash
 cd scripts/offline-build/
@@ -54,12 +54,12 @@ cd scripts/offline-build/
 ./supplement-20.03-gcc10.sh all         # 20.03 专用：补 gcc-10 工具集 + meson 0.59（20.03 自带 gcc-7）
 # B. 离线装依赖（目标机，无网）→ 传对应 SP 的 RPM 目录，版本会被核对
 ./install-deps.sh ../../third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3
-# C. 目标机原生构建（依赖已装）
+# C. 目标机原生构建（依赖已装，仅 24.03）
 ./build.sh                              # meson + ninja + 冒烟（zstd19 -n 1）
-# D. 按版本容器构建（免主机安装；源码只读挂载）
+# D. 按版本容器构建（免主机安装；源码只读挂载）—— 22.03/20.03 必走此路
 ./container-build.sh 24.03 SP3          # → build-out/openEuler-24.03LTS_SP3/opendcdiag
 ./container-build.sh 22.03 SP3          # 注入 -DOPENEULER_22_03 + C++23 polyfill
-./container-build.sh 20.03 SP4          # 用 gcc-toolset-10、仓内 vendored meson 0.59.4
+./container-build.sh 20.03 SP4          # gcc-toolset-10 + 仓内 vendored meson 0.59.4
 # E. 打包到对应版本 built/ 目录
 ./package-built-artifacts.sh 24.03 SP3
 # F. 纯净容器验证（仅挂 built/，验证可直接运行）
@@ -73,26 +73,25 @@ cd scripts/offline-build/
 
 完整依赖与排坑见 [docs/offline-build-dependencies.md](docs/offline-build-dependencies.md)。
 
-### Multi-Version Build & Deploy (多 openEuler 版本构建部署)
+### 多版本一键构建与部署（15 个 OS 版本）
 
-单机原生构建见上;若需在 **openEuler 20.03 / 22.03 / 24.03 三系列 × LTS+SP1~SP4(共 15 个版本)** 上各产出原生二进制并部署(受版本间 gcc-7/10/12 与依赖库差异限制,需逐版本构建),用 `scripts/offline-build/` 下的离线构建链:容器镜像烘焙依赖(ghcr.io)、15 矩阵编排(5 效率杠杆:deps 烘焙/哈希 skip/-P 并行/--since/smoke|full)、逐版本纯净验证后打包发布 tarball。
+上面 D→E→F 的单 SP 手动链，由 `build-all.sh` 自动化封装（含镜像烘焙、哈希 skip、`-P` 并行、`--since`、smoke/full 五档）。要一次性构建全 15 个版本（20.03/22.03/24.03 × LTS+SP1~SP4）并发布现场包：
 
 ```console
-# 克隆(含 RPM 依赖子模块)
+# 克隆（含 RPM 依赖子模块）→ 切到方案分支
 git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
 cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
-# 一键构建验证全 15 版本(发布闸门)
+# 全 15 版本构建 + 纯净验证（发布闸门）→ 各 SP 产物进 built/
 ./scripts/offline-build/build-all.sh --all --full --jobs 3   # 期望 PASS: 15
-# 产出现场 tarball(~6MB,含自动检测 OS 的 run.sh)
+# 产出现场 tarball（~6MB，含自动检测 OS 的 run.sh）
 ./scripts/offline-build/package-release.sh 24.03 SP3
-# 目标机:解压后 ./run.sh -e zstd19 -t 2000 -n 1   # 自动精确匹配 OS 版本
+# 目标机：解压后 ./run.sh -e zstd19 -t 2000 -n 1   # run.sh 自动精确匹配 OS 版本，不匹配则硬停指路
 ```
 
-完整设计与操作指南见:
-- [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md) — 完整设计方案(三层存储分层、镜像构建子系统、build-all 编排、适配层收敛、CI 矩阵、落地顺序)
-- [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md) — 工作回顾与一键复现指南(最小命令序列、15 SP 全 full 验证基线、复现 gotcha、patches 历程)
+> `run.sh` 部署逻辑：检测本机 OS → 精确匹配 `built-index.tsv`（不跨版本回退）→ 校验 `binary-sha256` → `exec run-opendcdiag.sh`（设 `LD_LIBRARY_PATH` 指向随包 `libs/`）。
 
-快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
+完整设计与操作指南见 [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md)（设计方案）与 [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md)（一键复现指南 + 15 SP 全 full 验证基线 + 复现 gotcha）。快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
+
 
 
 
