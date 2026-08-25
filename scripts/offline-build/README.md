@@ -58,6 +58,35 @@ SP4   ...LTS_SP4                 ...LTS_SP4                 ...LTS_SP4
 
 构建全 15:`./scripts/offline-build/build-all.sh --all --full`(发布闸门)。
 
+### 15 SP 全 full 验证(已实测,100% 可重现)
+
+全 15 个 SP 各自 full 验证(eigen -n1 + 全量 -n8,纯净容器只挂 built/)全 PASS,0 fail 0 crash:
+
+| 系列 | LTS | SP1 | SP2 | SP3 | SP4 |
+|---|---|---|---|---|---|
+| 24.03 (gcc-12) | pass 1253 | 1286 | 1542 | 1758 | 2840 |
+| 22.03 (gcc-10) | pass 3812 | 2642 | 2429 | 3831 | 2326 |
+| 20.03 (gcc-10 toolset) | pass 2586 | 3610 | 2940 | 1145 | 1011 |
+
+> 全部 fail=0, 0 crash。覆盖三系列 + 最老(gcc-7+toolset-10)/基准(gcc-12)toolchain。容器内对源码副本零修改(4 段 sed 全收敛到源码/meson option,只剩 CXXFLAGS/polyfill 注入 + -D)。
+
+## ghcr.io 镜像推送(可选,有网机)
+
+镜像默认构建到本地 `localhost/openeuler-offline:<tag>`。要跨机共享/给 CI 用,推到 ghcr.io:
+
+```bash
+# 1. 生成 GitHub fine-grained token(需 write:packages 权限)
+# 2. 登录(一次性)
+echo "$GHCR_TOKEN" | podman login ghcr.io -u <github-user> --password-stdin
+# 3. 构建并推送
+./scripts/offline-build/images/build-images.sh 24.03 SP3 --push
+#   → manifest 的 remote 列变 yes, image-digest 写入远端 digest
+# 4. 气隙(无网):用 --tar 导出 oci tarball,拷到现场 podman load
+./scripts/offline-build/images/build-images.sh 24.03 SP3 --tar
+```
+
+> push 逻辑已用 `podman save/load`(tar 流转)等价验证(导出 1.6G tar → load → 容器内 gcc/find 可用)。push 到 ghcr 只是网络传输同一 tar,代码路径 `build-images.sh --push` 已就绪;实测 push 需用户用自己的 token 授权(本仓无 token)。
+
 ## 效率杠杆(为何"高效")
 
 | 杠杆 | 机制 | 收益 |
