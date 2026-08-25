@@ -44,7 +44,7 @@ ninja -C builddir
 
 ## 离线与多版本构建
 
-离线工具在 `scripts/offline-build/`，三个脚本（`download-deps.sh`/`install-deps.sh`/`build.sh`）共享 `_common.sh`，检测本机 openEuler SP 并用 `.os-version` 标记强制版本匹配。
+离线工具在 `scripts/offline-build/`，三个脚本（`download-deps.sh`/`install-deps.sh`/`build.sh`）共享 `_common.sh`，检测本机 openEuler SP 并用 `.os-version` 标记强制版本匹配。注：这条单机原生路径的 `_common.sh` 基线**硬编码 24.03**（`detect_os_version_full` 只对 24.03 SP 正确）；22.03/20.03 必须走下面的容器路径（D）。
 
 ```bash
 cd scripts/offline-build/
@@ -59,7 +59,7 @@ cd scripts/offline-build/
 # D. 按版本容器构建（免主机安装；源码只读挂载）
 ./container-build.sh 24.03 SP3          # → build-out/openEuler-24.03LTS_SP3/opendcdiag
 ./container-build.sh 22.03 SP3          # 注入 -DOPENEULER_22_03 + C++23 polyfill
-./container-build.sh 20.03 SP4          # 用 gcc-toolset-10、meson 0.59 源码树
+./container-build.sh 20.03 SP4          # 用 gcc-toolset-10、仓内 vendored meson 0.59.4
 # E. 打包到对应版本 built/ 目录
 ./package-built-artifacts.sh 24.03 SP3
 # F. 纯净容器验证（仅挂 built/，验证可直接运行）
@@ -69,7 +69,7 @@ cd scripts/offline-build/
 ./run-full-tests.sh 24.03 SP3 [build]
 ```
 
-> **22.03 / 20.03 适配仅在容器内进行**：旧工具链（gcc-10、meson 0.59/0.54、binutils 2.34）缺 C++20/23 特性。`container-build.sh` 只读挂载源码树，在可丢弃副本上注入 `framework/compat/cpp23_polyfill.h`、版本宏（`OPENEULER_22_03`/`OPENEULER_20_03`）和 `sed` 补丁（如 `string::contains`→`.find()`、`udf`→`.inst`）——host 源码不动，x86/24.03 参考路径不受影响。
+> **22.03 / 20.03 适配仅在容器内进行**：旧工具链（gcc-10、meson 0.59/0.54、binutils 2.34）缺 C++20/23 特性。`container-build.sh` 只读挂载源码树，在可丢弃副本上注入 `framework/compat/cpp23_polyfill.h`、版本宏（`OPENEULER_22_03`/`OPENEULER_20_03`）和 `-D` meson option（`-Denable_acl=disabled`）——host 源码不动，x86/24.03 参考路径不受影响。历史上的 `sed` 补丁（`string::contains`→`.find()`、`udf`→`.inst`、ACL 置空、`meson_version` 放宽）**已全部收敛到源码/meson option**，容器内对源码副本零修改，只剩 CXXFLAGS/polyfill 注入。
 
 完整依赖与排坑见 [docs/offline-build-dependencies.md](docs/offline-build-dependencies.md)。
 
