@@ -1,4 +1,4 @@
-# OpenDCDiag ARM64 多 openEuler 版本构建部署回顾报告
+# OpenDCDiag ARM64 多 openEuler 版本构建部署简报
 
 > 目的:本文回顾"多 openEuler 版本构建部署"工作的设计与实现,并给出**人/AI 可照做的一键式构建、部署、验证流程**,覆盖 openEuler 20.03 / 22.03 / 24.03 三大系列的 LTS + SP1~SP4 共 **15 个** OS 版本,aarch64 架构。
 >
@@ -8,7 +8,7 @@
 
 ## 0. 一句话结论
 
-21 个 patch,全部 verify→push 到 `feat/multi-version-build-deploy` 分支(非 main)。**15 个 OS 版本各产出一个原生二进制,逐版本 full 验证全 PASS(0 fail, 0 crash)**;镜像推 ghcr.io 实测通过(可跨机/CI 共享);现场 tarball ~6MB"下载即跑"。任何人 `git clone --recurse-submodules` 后照本文流程可 **100% 复现**。
+**15 个 OS 版本各产出一个原生二进制,逐版本 full 验证全 PASS(0 fail, 0 crash)**;镜像推 ghcr.io 实测通过(可跨机/CI 共享);现场 tarball ~6MB"下载即跑"。任何人 `git clone --recurse-submodules` 后照本文流程可 **100% 复现**。
 
 ---
 
@@ -70,7 +70,7 @@ OpenDCDiag 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 
 # 1. 克隆主仓 + RPM submodule(3 仓,共~4.7GB,首次慢)
 git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
 cd opendcdiag-arm
-git checkout feat/multi-version-build-deploy   # 本方案分支
+git checkout main   # 本方案分支
 git submodule update --init --recursive          # 确保 RPM 树就绪
 
 # 2.(可选,要跨机共享镜像才需)ghcr.io 授权
@@ -262,7 +262,7 @@ selftest_sigill 用 .inst 仍触发 SIGILL(code 4, ILL_ILLOPC)✓
 ```bash
 # === 构建机(aarch64 openEuler 或任意 aarch64 + podman)===
 git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
+cd opendcdiag-arm && git checkout main
 git submodule update --init --recursive
 # (可选)ghcr 授权:echo $GHCR_TOKEN | podman login ghcr.io -u wangxumarshall --password-stdin
 
