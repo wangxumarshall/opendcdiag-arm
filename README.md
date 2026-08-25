@@ -40,6 +40,8 @@ ninja -C builddir
 
 > ARM64 要求 Eigen 5.0.0+（系统 Eigen 3.3.x 在 GCC 12+ 下编译失败）。仓库自带 `third-party/eigen5/`，aarch64 构建路径在 `tests/cpu/meson.build` 中直接 `include_directories` 指向它，**无需系统安装 eigen3**；`PKG_CONFIG_PATH` 仅为兼容 x86 路径而保留，带上无害。
 
+
+
 ## 离线与多版本构建
 
 离线工具在 `scripts/offline-build/`，三个脚本（`download-deps.sh`/`install-deps.sh`/`build.sh`）共享 `_common.sh`，检测本机 openEuler SP 并用 `.os-version` 标记强制版本匹配。
@@ -71,6 +73,29 @@ cd scripts/offline-build/
 
 完整依赖与排坑见 [docs/offline-build-dependencies.md](docs/offline-build-dependencies.md)。
 
+### Multi-Version Build & Deploy (多 openEuler 版本构建部署)
+
+单机原生构建见上;若需在 **openEuler 20.03 / 22.03 / 24.03 三系列 × LTS+SP1~SP4(共 15 个版本)** 上各产出原生二进制并部署(受版本间 gcc-7/10/12 与依赖库差异限制,需逐版本构建),用 `scripts/offline-build/` 下的离线构建链:容器镜像烘焙依赖(ghcr.io)、15 矩阵编排(5 效率杠杆:deps 烘焙/哈希 skip/-P 并行/--since/smoke|full)、逐版本纯净验证后打包发布 tarball。
+
+```console
+# 克隆(含 RPM 依赖子模块)
+git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
+cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
+# 一键构建验证全 15 版本(发布闸门)
+./scripts/offline-build/build-all.sh --all --full --jobs 3   # 期望 PASS: 15
+# 产出现场 tarball(~6MB,含自动检测 OS 的 run.sh)
+./scripts/offline-build/package-release.sh 24.03 SP3
+# 目标机:解压后 ./run.sh -e zstd19 -t 2000 -n 1   # 自动精确匹配 OS 版本
+```
+
+完整设计与操作指南见:
+- [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md) — 完整设计方案(三层存储分层、镜像构建子系统、build-all 编排、适配层收敛、CI 矩阵、落地顺序)
+- [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md) — 工作回顾与一键复现指南(最小命令序列、15 SP 全 full 验证基线、复现 gotcha、patches 历程)
+
+快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
+
+
+
 ## 可选：启用 OpenSSL SHA（`openssl_sha`）
 
 `openssl_sha` 经 OpenSSL 计算 SHA-256/384/512 与 golden 比对。默认不构建，由 `ssl_link_type`（默认 `none`）控制。
@@ -87,6 +112,7 @@ sudo dnf install -y openssl-devel
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup --reconfigure builddir --buildtype=release -Dssl_link_type=dynamic
 ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
 ```
+
 
 ## 测试用例与检测能力
 
@@ -135,6 +161,7 @@ ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
 
 ## 运行测试
 
+>>>>>>> main
 ```console
 ./builddir/opendcdiag --list-tests                        # 列 PROD 用例（默认）
 ./builddir/opendcdiag -e zstd19 -t 5000                   # 单测试，5 秒，全核
