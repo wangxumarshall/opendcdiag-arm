@@ -129,6 +129,28 @@ instructions.
 ./builddir/opendcdiag --quality=-1 -e eigen_svd_cdouble_sve -t 5000
 ```
 For detailed ARM64 build information, see [docs/BUILD_ARM64.md](docs/BUILD_ARM64.md).
+
+### Multi-Version Build & Deploy (多 openEuler 版本构建部署)
+
+单机原生构建见上;若需在 **openEuler 20.03 / 22.03 / 24.03 三系列 × LTS+SP1~SP4(共 15 个版本)** 上各产出原生二进制并部署(受版本间 gcc-7/10/12 与依赖库差异限制,需逐版本构建),用 `scripts/offline-build/` 下的离线构建链:容器镜像烘焙依赖(ghcr.io)、15 矩阵编排(5 效率杠杆:deps 烘焙/哈希 skip/-P 并行/--since/smoke|full)、逐版本纯净验证后打包发布 tarball。
+
+```console
+# 克隆(含 RPM 依赖子模块)
+git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
+cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
+# 一键构建验证全 15 版本(发布闸门)
+./scripts/offline-build/build-all.sh --all --full --jobs 3   # 期望 PASS: 15
+# 产出现场 tarball(~6MB,含自动检测 OS 的 run.sh)
+./scripts/offline-build/package-release.sh 24.03 SP3
+# 目标机:解压后 ./run.sh -e zstd19 -t 2000 -n 1   # 自动精确匹配 OS 版本
+```
+
+完整设计与操作指南见:
+- [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md) — 完整设计方案(三层存储分层、镜像构建子系统、build-all 编排、适配层收敛、CI 矩阵、落地顺序)
+- [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md) — 工作回顾与一键复现指南(最小命令序列、15 SP 全 full 验证基线、复现 gotcha、patches 历程)
+
+快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
+
 ## Test Quality Levels
 OpenDCDiag-ARM tests are classified by quality levels that determine when they run:
 | Level | Name | Description | Run Condition |
