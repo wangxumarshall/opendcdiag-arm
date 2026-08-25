@@ -85,7 +85,7 @@ echo "$GHCR_TOKEN" | podman login ghcr.io -u <github-user> --password-stdin
 ./scripts/offline-build/images/build-images.sh 24.03 SP3 --tar
 ```
 
-> push 逻辑已用 `podman save/load`(tar 流转)等价验证(导出 1.6G tar → load → 容器内 gcc/find 可用)。push 到 ghcr 只是网络传输同一 tar,代码路径 `build-images.sh --push` 已就绪;实测 push 需用户用自己的 token 授权(本仓无 token)。
+> push 已实测(24.03-SP3 镜像):`build-images.sh 24.03 SP3 --push` → `ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3`,manifest `remote=yes` + `image-digest=sha256:...` 写入;`podman pull` 拉回镜像内 `gcc 12.3.1`/`find`/`meson` 全可用。token 用 PAT(`write:packages` 权限),实测后请 revoke/rotate 暴露过的 token。
 
 ## 效率杠杆(为何"高效")
 
