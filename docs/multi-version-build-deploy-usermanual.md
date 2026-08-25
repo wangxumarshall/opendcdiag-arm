@@ -1,4 +1,4 @@
-# OpenDCDiag ARM64 多 openEuler 版本构建部署简报
+# OpenDCDiag ARM64 多 openEuler 版本构建部署用户指南
 
 > 目的:本文回顾"多 openEuler 版本构建部署"工作的设计与实现,并给出**人/AI 可照做的一键式构建、部署、验证流程**,覆盖 openEuler 20.03 / 22.03 / 24.03 三大系列的 LTS + SP1~SP4 共 **15 个** OS 版本,aarch64 架构。
 >
