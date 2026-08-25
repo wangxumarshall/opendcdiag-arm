@@ -111,7 +111,7 @@ After writing code and before committing, the AI **must verify itself** with rea
 2. **Functional verification**: run the actual affected behavior with real commands and capture real output — e.g. `./builddir/opendcdiag --dump-cpu-info`, `-e <test>`, `--on-crash=context -e selftest_sigsegv -vv`. Quote the real observed output (a frequency value, a `result: pass`, a crash backtrace) as proof, not a prediction.
 3. **Regression check**: run at least one unaffected test (e.g. `zstd19`) and confirm `exit: pass`, zero SIGSEGV, to prove no collateral breakage.
 4. **x86-64 non-regression**: the diff must not alter x86 behavior. Confirm by inspection that changes are under `#elif/__aarch64__` or per-arch meson guards, or widening `#ifdef __x86_64__` to `|| __aarch64__` only where genuinely shared.
-
+5. 大颗粒度修改，同步更新readme.md和docs目录下对应文档，确保文档100%准确
 Do **not** commit if any of these fail. If a verification step fails, fix and re-verify until it passes. Skipping verification or fabricating results ("assumed to pass") is strictly forbidden — every claim in the commit message must correspond to a command the AI actually ran.
 
 ### Auto-push to a non-main branch after verification
