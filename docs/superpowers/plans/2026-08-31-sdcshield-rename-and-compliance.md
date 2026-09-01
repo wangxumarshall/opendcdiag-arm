@@ -817,7 +817,7 @@ git submodule update --init --recursive
 
 Expected: submodules check out from new URLs (GitHub auto-redirects anyway, but the config must reflect the canonical new name).
 
-- [ ] **Step 3: Final repo-wide sweep — confirm only allowed `opendcdiag`/`OpenDCDiag` tokens remain**
+- [x] **Step 3: Final repo-wide sweep — confirm only allowed `opendcdiag`/`OpenDCDiag` tokens remain**
 
 ```bash
 grep -rin "opendcdiag" . 2>/dev/null | grep -v "\.git/" | grep -v "^Binary"
@@ -831,7 +831,7 @@ Categorize every remaining hit. Allowed survivors:
 
 Anything else (actionable binary/launcher/script path, project self-reference) is a **gap** → fix in a follow-up edit before committing.
 
-- [ ] **Step 4: Full build + regression from clean**
+- [x] **Step 4: Full build + regression from clean**
 
 ```bash
 rm -rf builddir
@@ -844,7 +844,7 @@ ninja -C builddir
 
 Expected: clean build; `--version` → `sdcshield-...`; zstd19 passes; dump-cpu-info prints.
 
-- [ ] **Step 5: DCO check — every commit Signed-off-by**
+- [x] **Step 5: DCO check — every commit Signed-off-by**
 
 ```bash
 git log --grep="Signed-off-by" --oneline rename/sdcshield ^main | wc -l
