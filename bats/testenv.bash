@@ -19,7 +19,7 @@ else
 fi
 
 if [[ -z "$SANDSTONE_BIN" ]]; then
-    SANDSTONE_BIN=$BATS_TEST_COMMONDIR/../opendcdiag
+    SANDSTONE_BIN=$BATS_TEST_COMMONDIR/../sdcshield
 fi
 if [[ -z "$SANDSTONE" ]]; then
     SANDSTONE=$SANDSTONE_BIN

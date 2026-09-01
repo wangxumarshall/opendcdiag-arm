@@ -40,14 +40,14 @@ runs:
       run: ninja -C builddir-windows
     - name: List DLL dependencies
       shell: msys2 {0}
-      run: objdump -p builddir-windows/opendcdiag.exe | grep DLL\ Name
+      run: objdump -p builddir-windows/sdcshield.exe | grep DLL\ Name
     - uses: actions/upload-artifact@v4
       with:
         name: windows-binary
-        path: builddir-windows/opendcdiag.exe
+        path: builddir-windows/sdcshield.exe
         retention-days: 3
-    - name: confirm OpenDCDiag runs
+    - name: confirm SDCShield runs
       shell: msys2 {0}
       run: |
-        builddir-windows/opendcdiag --version
-        builddir-windows/opendcdiag --dump-cpu-info
+        builddir-windows/sdcshield --version
+        builddir-windows/sdcshield --dump-cpu-info

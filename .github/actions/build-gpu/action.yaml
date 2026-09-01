@@ -65,12 +65,12 @@ runs:
     - uses: actions/upload-artifact@v4
       with:
         name: linux-${{ inputs.name }}-binary-gpu
-        path: builddir/opendcdiag
+        path: builddir/sdcshield
         retention-days: 3
-    - name: confirm opendcdiag runs
+    - name: confirm sdcshield runs
       shell: bash
       run: |
-        builddir/opendcdiag --version
+        builddir/sdcshield --version
     - name: ninja build unittests
       if: ${{ inputs.unittests }}
       shell: bash

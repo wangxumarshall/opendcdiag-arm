@@ -65,14 +65,14 @@ jobs:
         run: |
           set -x
           set selftest_skip \
-              $(builddir/opendcdiag --selftests --list-tests | grep selftest_log_skip) \
+              $(builddir/sdcshield --selftests --list-tests | grep selftest_log_skip) \
               '@positive'
           for t; do
-            builddir/opendcdiag --quick --selftests -e "$t" -o -
+            builddir/sdcshield --quick --selftests -e "$t" -o -
           done
           set selftest_failinit selftest_logerror
           for t; do
-            if builddir/opendcdiag --quick --retest-on-failure=0 --selftests -e "$t" -o -; then
+            if builddir/sdcshield --quick --retest-on-failure=0 --selftests -e "$t" -o -; then
               exit 1
             else
               [[ $? = 1 ]]
@@ -83,14 +83,14 @@ jobs:
         shell: bash
         run: |
           ulimit -St 120
-          SANDSTONE_BIN=builddir/opendcdiag bats -t bats/sanity-check
+          SANDSTONE_BIN=builddir/sdcshield bats -t bats/sanity-check
       - name: run tests quickly
         shell: bash
         run: |
           ulimit -St 120
           nproc=`nproc`
           nproc=$((nproc > 4 ? 4 : nproc))
-          builddir/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+          builddir/sdcshield --quick -n$nproc --retest-on-failure=0 -o -
       - name: upload test run logs
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -115,21 +115,21 @@ jobs:
         run: |
           set -x
           set selftest_skip \
-              $(builddir-windows/opendcdiag --selftests --list-tests | grep selftest_log_skip) \
+              $(builddir-windows/sdcshield --selftests --list-tests | grep selftest_log_skip) \
               '@positive'
           for t; do
-            builddir-windows/opendcdiag --quick --selftests -e "$t" -o -
+            builddir-windows/sdcshield --quick --selftests -e "$t" -o -
           done
-          builddir-windows/opendcdiag --quick --selftests -e selftest_failinit && exit 1 || [[ $? = 1 ]]
+          builddir-windows/sdcshield --quick --selftests -e selftest_failinit && exit 1 || [[ $? = 1 ]]
       - name: run selftests
         shell: msys2 {0}
-        run: SANDSTONE_BIN=builddir-windows/opendcdiag.exe bats-core/bin/bats -t bats/sanity-check
+        run: SANDSTONE_BIN=builddir-windows/sdcshield.exe bats-core/bin/bats -t bats/sanity-check
       - name: run tests quickly
         shell: msys2 {0}
         run: |
           nproc=`nproc`
           nproc=$((nproc > 4 ? 4 : nproc))
-          builddir-windows/opendcdiag --quick -n$nproc --retest-on-failure=0 -o -
+          builddir-windows/sdcshield --quick -n$nproc --retest-on-failure=0 -o -
       - name: upload test run logs
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

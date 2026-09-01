@@ -636,13 +636,13 @@ git push
 
 **Note on `SANDSTONE_BIN` / `SANDSTONE` env vars:** These are *internal* names (constraint #4 — `sandstone` frozen). Do **not** rename the env var `SANDSTONE_BIN`. Only the **path value** it defaults to changes (`../opendcdiag` → `../sdcshield`).
 
-- [ ] **Step 1: Preview CI surface**
+- [x] **Step 1: Preview CI surface**
 
 ```bash
 grep -rn "opendcdiag" .github/ bats/
 ```
 
-- [ ] **Step 2: Apply path replacements**
+- [x] **Step 2: Apply path replacements**
 
 In all `.github/workflows/pr.yaml` and `.github/actions/*/action.yaml`:
 - `builddir/opendcdiag` → `builddir/sdcshield`
@@ -661,7 +661,7 @@ In all `.github/workflows/pr.yaml` and `.github/actions/*/action.yaml`:
         # SDCShield's built-in register dumper is only implemented for x86-64.
 ```
 
-- [ ] **Step 3: Validate YAML + bats syntax**
+- [x] **Step 3: Validate YAML + bats syntax**
 
 ```bash
 python3 -c "import yaml,sys; [yaml.safe_load(open(f)) for f in sys.argv[1:]]" .github/workflows/pr.yaml .github/actions/*/action.yaml
@@ -670,7 +670,7 @@ bash -n bats/testenv.bash bats/sanity-check/helpers.bash
 
 Expected: no Python/yaml errors; `bash -n` silent.
 
-- [ ] **Step 4: Run bats sanity locally**
+- [x] **Step 4: Run bats sanity locally**
 
 ```bash
 ninja -C builddir
@@ -679,7 +679,7 @@ SANDSTONE_BIN=builddir/sdcshield bats bats/sanity-check/10-yaml-validate.bats
 
 Expected: `ok` (pass). (Full bats suite is CI's job; one sanity test proves the `SANDSTONE_BIN` path resolution.)
 
-- [ ] **Step 5: Verify no Intel copyright touched + env-var names unchanged**
+- [x] **Step 5: Verify no Intel copyright touched + env-var names unchanged**
 
 ```bash
 git diff .github/ bats/ | grep -E "^-.*Copyright|^-.*SPDX"
@@ -688,7 +688,7 @@ git diff bats/testenv.bash | grep -E "^\+.*SANDSTONE_BIN=|^-.*SANDSTONE_BIN="
 
 Expected: first empty; second shows the `=...sdcshield` value changed but `SANDSTONE_BIN` var name preserved.
 
-- [ ] **Step 6: Commit + push**
+- [x] **Step 6: Commit + push**
 
 ```bash
 git add .github/ bats/
