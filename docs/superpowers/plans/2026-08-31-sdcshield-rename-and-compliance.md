@@ -794,7 +794,7 @@ git push
 2. Rename 3 submodule repos `opendcdiag-arm-rpm-{20.03,22.03,24.03}` → `sdcshield-rpm-{20.03,22.03,24.03}`.
 3. Rename/retag ghcr image repo `opendcdiag-offline` → `sdcshield-offline` (or just repoint `GHCR_USER` path; old tags remain pullable).
 
-- [ ] **Step 1: After the 3 submodule repos are renamed on GitHub, update `.gitmodules`**
+- [x] **Step 1: After the 3 submodule repos are renamed on GitHub, update `.gitmodules`**
 
 ```
 [submodule "third-party/rpms/openEuler-20.03"]
@@ -808,7 +808,7 @@ git push
 	url = git@github.com:wangxumarshall/sdcshield-rpm-24.03.git
 ```
 
-- [ ] **Step 2: Re-sync submodule URLs**
+- [x] **Step 2: Re-sync submodule URLs**
 
 ```bash
 git submodule sync --recursive
@@ -853,7 +853,7 @@ git log --oneline rename/sdcshield ^main | wc -l
 
 Expected: the two counts are equal (every new commit has S-o-b).
 
-- [ ] **Step 6: Commit + push**
+- [x] **Step 6: Commit + push**
 
 ```bash
 git add .gitmodules
@@ -874,7 +874,7 @@ Signed-off-by: wangxu <wangxu@example.com>"
 git push
 ```
 
-- [ ] **Step 7: openEuler import readiness checklist**
+- [x] **Step 7: openEuler import readiness checklist**
 
 - [x] `NOTICE` present and references Intel upstream + ARM64 port URL.
 - [x] `LICENSE` is full Apache-2.0 (untouched).

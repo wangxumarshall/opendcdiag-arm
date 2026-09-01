@@ -6,8 +6,8 @@
 
 ```bash
 # 1. 克隆(含 RPM 依赖树子模块,各 1~1.7GB,需磁盘 ~4GB)
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield
 
 # 2. 构建一个版本(以 24.03 SP3 基准为例)
 #    build-all.sh: 镜像就绪 → 源码构建 → 打包 → 纯净验证

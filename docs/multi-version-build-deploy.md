@@ -14,7 +14,7 @@
 | 单系列 5 SP RPM 树 | 0.98–1.7 GB | 同上,每系列独立 submodule |
 | 单 SP `built/` 产物(二进制+libs) | 2.8–19 MB | 各 RPM submodule 的 `built/`(已是现状) |
 | 单 SP 容器镜像(装好 deps) | 210–595 MB | **ghcr.io Registry**(本方案,不入 git) |
-| `Containerfile` + 编排脚本(文本) | < 10 KB | sdcshield(原 opendcdiag-arm)主仓 git |
+| `Containerfile` + 编排脚本(文本) | < 10 KB | sdcshield 主仓 git |
 | 现有本地 podman 镜像存储 | 39 GB(15 镜像) | 迁移至 Registry 后本地仅作缓存 |
 
 > 体积结论:RPM 树与镜像层均为**百 MB 级**,绝不进 git pack(2GB 上限 + 二进制不可压缩)。RPM 树作为**构建输入**需 git 追踪版本 → 已用 submodule 解决;镜像作为**构建产物**该进 Registry,不入 git。
@@ -465,7 +465,7 @@ exec "$bindir/run-sdcshield.sh" "$@"
 ## 8. 目标目录与文件总图
 
 ```
-opendcdiag-arm/
+sdcshield/
 ├── scripts/offline-build/
 │   ├── _common.sh                    (已有: 版本检测)
 │   ├── download-all-versions.sh      (已有: 15 SP RPM 下载)

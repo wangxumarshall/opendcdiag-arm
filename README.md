@@ -16,9 +16,9 @@ SDCShield is derived from OpenDCDiag (which contains the Intel `sandstone` frame
 
 | 子模块目录 | 覆盖版本 |
 |---|---|
-| [`third-party/rpms/openEuler-20.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-20.03.git) | 20.03 LTS / SP1–SP4 |
-| [`third-party/rpms/openEuler-22.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-22.03.git) | 22.03 LTS / SP1–SP4 |
-| [`third-party/rpms/openEuler-24.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-24.03.git) | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
+| [`third-party/rpms/openEuler-20.03/`](https://github.com/wangxumarshall/sdcshield-rpm-20.03.git) | 20.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-22.03/`](https://github.com/wangxumarshall/sdcshield-rpm-22.03.git) | 22.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-24.03/`](https://github.com/wangxumarshall/sdcshield-rpm-24.03.git) | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
 
 ```bash
 git clone --recurse-submodules <repo-url>   # 含子模块
@@ -83,8 +83,8 @@ cd scripts/offline-build/
 
 ```console
 # 克隆（含 RPM 依赖子模块）→ 切到方案分支
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield && git checkout feat/multi-version-build-deploy
 # 全 15 版本构建 + 纯净验证（发布闸门）→ 各 SP 产物进 built/
 ./scripts/offline-build/build-all.sh --all --full --jobs 3   # 期望 PASS: 15
 # 产出现场 tarball（~6MB，含自动检测 OS 的 run.sh）

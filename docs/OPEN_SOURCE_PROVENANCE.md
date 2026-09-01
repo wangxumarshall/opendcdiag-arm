@@ -14,7 +14,7 @@ SDCShield is a derived work with the following lineage:
 
 1. **Original upstream**: [OpenDCDiag](https://github.com/intel/OpenDCDiag) by Intel Corporation,
    containing the `sandstone` CPU-testing framework. Licensed under Apache License 2.0.
-2. **ARM64 port**: [opendcdiag-arm](https://github.com/wangxumarshall/opendcdiag-arm) — a fork of
+2. **ARM64 port**: [opendcdiag-arm](https://github.com/wangxumarshall/sdcshield) (renamed to sdcshield) — a fork of
    Intel's OpenDCDiag ported to ARM64 (Kunpeng 920 / generic ARMv8.1+), with the x86-64
    reference architecture preserved.
 3. **SDCShield**: the present repository — a rebrand of the ARM64 port for contribution to the

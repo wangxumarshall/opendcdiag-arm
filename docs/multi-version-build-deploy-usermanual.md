@@ -38,7 +38,7 @@ SDCShield 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 2
 ## 2. 三层存储分层(架构)
 
 ```
-源码层  sdcshield(原 opendcdiag-arm)主仓(git,<30MB 新增)
+源码层  sdcshield 主仓(git,<30MB 新增)
         framework/ tests/ meson.build + scripts/offline-build/ +
         Containerfile.template + 编排脚本 + framework/compat/ + third-party/meson/
             │ git submodule pin
@@ -68,8 +68,8 @@ SDCShield 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 2
 # 磁盘:~5GB(RPM submodule 4.7GB + 镜像缓存)
 
 # 1. 克隆主仓 + RPM submodule(3 仓,共~4.7GB,首次慢)
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield
 git checkout main   # 本方案分支
 git submodule update --init --recursive          # 确保 RPM 树就绪
 
@@ -261,8 +261,8 @@ selftest_sigill 用 .inst 仍触发 SIGILL(code 4, ILL_ILLOPC)✓
 
 ```bash
 # === 构建机(aarch64 openEuler 或任意 aarch64 + podman)===
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm && git checkout main
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield && git checkout main
 git submodule update --init --recursive
 # (可选)ghcr 授权:echo $GHCR_TOKEN | podman login ghcr.io -u wangxumarshall --password-stdin
 
