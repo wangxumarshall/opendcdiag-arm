@@ -1,11 +1,11 @@
 #!/bin/bash
-# download-deps.sh — 在一台有网的 openEuler 24.03 SPx aarch64 上下载 OpenDCDiag
+# download-deps.sh — 在一台有网的 openEuler 24.03 SPx aarch64 上下载 SDCShield
 # 构建所需的全部 RPM（含依赖树），用于拷到无网环境离线安装。
 #
 # 用法:
 #   ./download-deps.sh [输出目录]
 #
-# 默认输出目录: ./opendcdiag-rpms
+# 默认输出目录: ./sdcshield-rpms
 # 需要 dnf-plugins-core (提供 `dnf download` 子命令). openEuler 最小安装
 # 默认不含它, 先在有网机上: dnf install -y dnf-plugins-core
 #
@@ -24,7 +24,7 @@ source "$SCRIPT_DIR/_common.sh"
 require_openeuler
 require_min_os
 
-OUTDIR="${1:-$(pwd)/opendcdiag-rpms}"
+OUTDIR="${1:-$(pwd)/sdcshield-rpms}"
 mkdir -p "$OUTDIR"
 
 # 写入版本标记文件, 供 install-deps.sh 在目标机核对

@@ -11,8 +11,8 @@
 #   package-release.sh <series> <sp>
 #     series: 24.03 | 22.03 | 20.03
 #     sp    : LTS | SP1 | SP2 | SP3 | SP4
-#   产物: dist/opendcdiag-openEuler-24.03LTS_SP3-<sha8>.tar.gz
-#   含: opendcdiag libs/ run-opendcdiag.sh MANIFEST.tsv VERSION built-index.tsv run.sh
+#   产物: dist/sdcshield-openEuler-24.03LTS_SP3-<sha8>.tar.gz
+#   含: sdcshield libs/ run-sdcshield.sh MANIFEST.tsv VERSION built-index.tsv run.sh
 #
 # SPDX-License-Identifier-Identifier: Apache-2.0
 set -euo pipefail
@@ -29,19 +29,19 @@ esac
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
 BUILT="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/built"
 
-[ -x "$BUILT/opendcdiag" ] || { echo "二进制不存在: $BUILT/opendcdiag (先跑 build-all.sh)" >&2; exit 1; }
+[ -x "$BUILT/sdcshield" ] || { echo "二进制不存在: $BUILT/sdcshield (先跑 build-all.sh)" >&2; exit 1; }
 
 # git sha8 作 tarball 名(溯源)
 GIT_SHA=$(git -C "$SRC_ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo "nogit")
 DIST="$SRC_ROOT/dist"
 mkdir -p "$DIST"
-TARBALL="$DIST/opendcdiag-${OS_TAG}-${GIT_SHA}.tar.gz"
+TARBALL="$DIST/sdcshield-${OS_TAG}-${GIT_SHA}.tar.gz"
 
 # built-index.tsv:全 15 SP 总表(部署匹配用)。从各 SP 的 VERSION 抽取汇总。
 INDEX="$SRC_ROOT/scripts/offline-build/built-index.tsv"
 generate_index() {
     {
-        echo "# built-index.tsv — OpenDCDiag 多版本二进制总表(部署匹配用)。"
+        echo "# built-index.tsv — SDCShield 多版本二进制总表(部署匹配用)。"
         echo "# 由 package-release.sh 自动生成。列: sp-tag | git-sha | built-date | series | sp | cpp_std | macro | binary-sha256 | build-hash"
         echo -e "sp-tag\tgit-sha\tbuilt-date\tseries\tsp\tcpp_std\tmacro\tbinary-sha256\tbuild-hash"
         for s in 20.03 22.03 24.03; do
@@ -103,22 +103,22 @@ echo "匹配: $(echo "$match" | awk -F'\t' '{print "gcc=","binary="substr($8,1,1
 
 # 校验 binary-sha256(防下载损坏)
 expected=$(echo "$match" | awk -F'\t' '{print $8}')
-if [ -x "$HERE/opendcdiag" ]; then
-    actual=$(sha256sum "$HERE/opendcdiag" | awk '{print $1}')
+if [ -x "$HERE/sdcshield" ]; then
+    actual=$(sha256sum "$HERE/sdcshield" | awk '{print $1}')
     [ "$actual" = "$expected" ] || { echo "校验失败: binary-sha256 不匹配(expected=$expected actual=$actual)" >&2; exit 1; }
     echo "校验: binary-sha256 ✓"
 fi
 
-exec "$HERE/run-opendcdiag.sh" "$@"
+exec "$HERE/run-sdcshield.sh" "$@"
 RUN_EOF
 }
 
 # 暂存目录(打 tar)
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-cp "$BUILT/opendcdiag" "$STAGE/"
+cp "$BUILT/sdcshield" "$STAGE/"
 cp -r "$BUILT/libs" "$STAGE/" 2>/dev/null || mkdir -p "$STAGE/libs"
-cp "$BUILT/run-opendcdiag.sh" "$STAGE/"
+cp "$BUILT/run-sdcshield.sh" "$STAGE/"
 cp "$BUILT/MANIFEST.tsv" "$STAGE/" 2>/dev/null || true
 cp "$BUILT/VERSION" "$STAGE/" 2>/dev/null || true
 generate_index; cp "$INDEX" "$STAGE/built-index.tsv"
@@ -126,5 +126,5 @@ generate_run_sh > "$STAGE/run.sh"; chmod +x "$STAGE/run.sh"
 
 tar -czf "$TARBALL" -C "$STAGE" .
 echo "==> 产出现场 tarball: $TARBALL ($(du -h "$TARBALL" | awk '{print $1}'))"
-echo "    含: opendcdiag libs/ run-opendcdiag.sh run.sh MANIFEST.tsv VERSION built-index.tsv"
+echo "    含: sdcshield libs/ run-sdcshield.sh run.sh MANIFEST.tsv VERSION built-index.tsv"
 tar -tzf "$TARBALL" | head

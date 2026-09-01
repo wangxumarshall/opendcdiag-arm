@@ -536,13 +536,13 @@ git push
 3. Default output dir `./opendcdiag-rpms` (`download-deps.sh:8,27`, `install-deps.sh:8,27,31`) → `./sdcshield-rpms`. This is a *path* external users pass on the CLI; renaming it changes the documented default. Keep consistent across all 3 scripts.
 4. `build-images.sh:38` `GHCR="ghcr.io/${GHCR_USER}/opendcdiag-offline"` → `sdcshield-offline` (image repo — external, rename in Task 9 on ghcr side; here just fix the string).
 
-- [ ] **Step 1: Preview the full surface**
+- [x] **Step 1: Preview the full surface**
 
 ```bash
 grep -rn "opendcdiag\|OpenDCDiag\|OPENDCDIAG" scripts/offline-build/
 ```
 
-- [ ] **Step 2: Apply edits per file**
+- [x] **Step 2: Apply edits per file**
 
 For each file, replace tokens:
 - `opendcdiag` (the binary/launcher name) → `sdcshield`
@@ -561,7 +561,7 @@ Specifically in `package-built-artifacts.sh`:
 - Line 201: `for f in sdcshield run-sdcshield.sh; do`
 - Line 215: `sdcshield $OS_TAG`
 
-- [ ] **Step 3: Syntax-check every modified shell script**
+- [x] **Step 3: Syntax-check every modified shell script**
 
 ```bash
 for f in scripts/offline-build/*.sh scripts/offline-build/_common.sh; do
@@ -571,7 +571,7 @@ done
 
 Expected: no `SYNTAX FAIL` lines.
 
-- [ ] **Step 4: End-to-end build + package verification (the real proof)**
+- [x] **Step 4: End-to-end build + package verification (the real proof)**
 
 ```bash
 # from repo root, deps assumed installed (per scripts/offline-build/README.md)
@@ -582,7 +582,7 @@ ls dist/
 
 Expected: a tarball named `dist/sdcshield-openEuler-24.03LTS_SP3-<sha8>.tar.gz` (or the host's SP tag). No file named `opendcdiag-*` in `dist/`.
 
-- [ ] **Step 5: Verify launcher + binary inside the tarball**
+- [x] **Step 5: Verify launcher + binary inside the tarball**
 
 ```bash
 tar tzf dist/sdcshield-openEuler-*.tar.gz | grep -E "sdcshield$|run-sdcshield\.sh"
@@ -590,7 +590,7 @@ tar tzf dist/sdcshield-openEuler-*.tar.gz | grep -E "sdcshield$|run-sdcshield\.s
 
 Expected: entries `./sdcshield` and `./run-sdcshield.sh`.
 
-- [ ] **Step 6: Verify no Intel copyright header touched (scripts have none, but check)**
+- [x] **Step 6: Verify no Intel copyright header touched (scripts have none, but check)**
 
 ```bash
 git diff scripts/ | grep -E "^-.*Copyright|^-.*SPDX"
@@ -598,7 +598,7 @@ git diff scripts/ | grep -E "^-.*Copyright|^-.*SPDX"
 
 Expected: empty (these scripts are fork-authored, but confirm nothing accidental).
 
-- [ ] **Step 7: Commit + push**
+- [x] **Step 7: Commit + push**
 
 ```bash
 git add scripts/offline-build/

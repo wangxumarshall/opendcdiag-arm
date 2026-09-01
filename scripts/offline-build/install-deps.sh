@@ -5,7 +5,7 @@
 # 用法:
 #   ./install-deps.sh [RPM目录]
 #
-# 默认从 download-deps.sh 的输出目录 ./opendcdiag-rpms 安装; 也可显式指定
+# 默认从 download-deps.sh 的输出目录 ./sdcshield-rpms 安装; 也可显式指定
 # RPM 所在目录作为第一个参数。
 #
 # **版本管控**: 读取 RPM 目录里的 .os-version 标记 (download-deps.sh 写入),
@@ -24,11 +24,11 @@ require_openeuler
 require_min_os
 
 # 默认指向 download-deps.sh 的输出目录
-RPMDIR="${1:-$(pwd)/opendcdiag-rpms}"
+RPMDIR="${1:-$(pwd)/sdcshield-rpms}"
 
 if [ ! -d "$RPMDIR" ]; then
     echo "错误: RPM 目录不存在: $RPMDIR" >&2
-    echo "       用法: $0 [RPM目录]  (默认 ./opendcdiag-rpms)" >&2
+    echo "       用法: $0 [RPM目录]  (默认 ./sdcshield-rpms)" >&2
     echo "       若尚未下载, 先在与本机同版本的 openEuler 有网机上运行 download-deps.sh。" >&2
     exit 1
 fi
@@ -70,7 +70,7 @@ echo "==> 从 $RPMDIR 离线安装 (禁用所有仓库, 拓扑排序后分批安
 # 其中混入 bootloader/固件/系统核心等受 dnf protected_packages 保护的包
 # (grub2-*, shim, mokutil, efivar, efibootmgr, dracut, os-prober, kpartx,
 # device-mapper, fuse, glibc 本身, systemd, pam, setup, filesystem, ...)
-# 它们版本若有差异 dnf 会视升级为删除受保护包而拒绝。OpenDCDiag 不依赖它们。
+# 它们版本若有差异 dnf 会视升级为删除受保护包而拒绝。SDCShield 不依赖它们。
 # glibc-devel / glibc-headers 不排除 (gcc 需要); 版本匹配时它们与目标机 glibc 配对。
 EXCLUDE_RE='^(grub2|grubby|shim|mokutil|efivar|efibootmgr|os-prober|dracut|'
 EXCLUDE_RE+='kpartx|device-mapper|fuse|fuse-common|fuse-help|'

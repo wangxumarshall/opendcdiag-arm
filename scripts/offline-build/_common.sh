@@ -11,7 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # 支持的最低 openEuler 大版本基线 (24.03 LTS)。SP 级别不限。
-OPENDCDIAG_OFFLINE_MIN_OS="24.03LTS"
+SDCSHIELD_OFFLINE_MIN_OS="24.03LTS"
 
 # 返回 openEuler 的 SP 级别短名 (小写): sp3 / sp4 ...
 # 从 /etc/os-release 的 VERSION="24.03 (LTS-SPx)" 提取; 回退到
@@ -39,7 +39,7 @@ detect_os_version_full() {
     local sp
     sp=$(detect_os_sp)
     # 大版本 24.03 LTS 固定 (当前仅支持该基线); SPx 来自 detect_os_sp
-    echo "openEuler-${OPENDCDIAG_OFFLINE_MIN_OS}_${sp^^}"
+    echo "openEuler-${SDCSHIELD_OFFLINE_MIN_OS}_${sp^^}"
 }
 
 # 确认当前运行在 openEuler 上 (脚本仅支持 openEuler)。否则报错退出。

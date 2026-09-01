@@ -2,7 +2,7 @@
 # Copyright (C) 2024 Intel Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-# This script is used to fuzz the opendcdiag binary using AFL.
+# This script is used to fuzz the sdcshield binary using AFL.
 # Additional parameters will be passed directly to the meson setup command.
 # In particular, you may want to use -Dafl_inc=/path/to/afl/include to specify
 # custom location of AFL headers.
