@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 project(
-    'OpenDCDiag',
+    'SDCShield',
     ['c', 'cpp'],
     default_options: [
         'b_pie=true',
@@ -28,13 +28,13 @@ shell = find_program('sh')
 
 if cpp.get_id() != 'gcc' or cc.get_id() != 'gcc'
     warning(
-        'We recommend building OpenDCDiag with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.',
+        'We recommend building SDCShield with the GNU Compiler Collection (gcc). Your build may fail or your executable may not behave as expected.',
     )
 endif
 
 if cpp.get_linker_id() != 'ld.bfd' or cc.get_linker_id() != 'ld.bfd'
     warning(
-        'We recommend linking OpenDCDiag with the binutils linker (ld). Your build may fail or your executable may not behave as expected.',
+        'We recommend linking SDCShield with the binutils linker (ld). Your build may fail or your executable may not behave as expected.',
     )
 endif
 

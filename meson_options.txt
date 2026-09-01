@@ -15,8 +15,8 @@ option('docdir', type : 'string', value : 'doc/dcdiag',
     description : 'Directory name of where documentation will be installed.')
 option('static_libstdcpp', type : 'boolean', value : false,
     description : 'Link with -static-libstdc++ (default false).')
-option('executable_name', type : 'string', value : 'opendcdiag',
-    description : 'Output name of the main binary (default "opendcdiag").')
+option('executable_name', type : 'string', value : 'sdcshield',
+    description : 'Output name of the main binary (default "sdcshield").')
 option('fallback_exec', type : 'string', value : '',
     description : 'Executable to run if processor does not support required features (e.g. AVX2)')
 option('selftests', type : 'boolean', value : true,

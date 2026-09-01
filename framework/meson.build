@@ -105,12 +105,12 @@ if meson.current_source_dir() == join_paths(meson.project_source_root(), 'framew
             perl,
             '@INPUT0@',
             '@OUTPUT@',
-            'opendcdiag',
+            'sdcshield',
             get_option('version_suffix'),
         ],
     )
 else
-    message('opendcdiag: not generating gitid.h -- likely included as subdir')
+    message('sdcshield: not generating gitid.h -- likely included as subdir')
 endif
 
 builtin_test_list_inputs = get_option('builtin_test_list')

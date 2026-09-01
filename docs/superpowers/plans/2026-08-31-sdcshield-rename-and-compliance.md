@@ -77,7 +77,7 @@ These apply to **every** task. Verify each before committing.
 - Consumes: existing `LICENSE` (Apache-2.0 full text — already present, do not touch).
 - Produces: `NOTICE` file (referenced by every downstream task's compliance check); `## Origin` section referenced by docs tasks.
 
-- [ ] **Step 1: Create branch**
+- [x] **Step 1: Create branch**
 
 ```bash
 git checkout -b rename/sdcshield
@@ -85,7 +85,7 @@ git checkout -b rename/sdcshield
 
 Expected: `Switched to a new branch 'rename/sdcshield'`
 
-- [ ] **Step 2: Create `NOTICE` file**
+- [x] **Step 2: Create `NOTICE` file**
 
 Write exactly this content to `./NOTICE`:
 
@@ -105,7 +105,7 @@ Original License: Apache License 2.0
 The original copyright statements of source files shall be retained.
 ```
 
-- [ ] **Step 3: Verify NOTICE present**
+- [x] **Step 3: Verify NOTICE present**
 
 ```bash
 cat NOTICE
@@ -113,7 +113,7 @@ cat NOTICE
 
 Expected: the exact block above, ending with `...shall be retained.`
 
-- [ ] **Step 4: Modify `LICENSE.3rdparty` line 1 (string only — do not touch forkfd/etc. entries below)**
+- [x] **Step 4: Modify `LICENSE.3rdparty` line 1 (string only — do not touch forkfd/etc. entries below)**
 
 `LICENSE.3rdparty:1` currently:
 ```
@@ -124,7 +124,7 @@ Change to:
 The SDCShield framework (derived from OpenDCDiag) includes source code from the following projects.
 ```
 
-- [ ] **Step 5: Add `## Origin` section to `README.md`**
+- [x] **Step 5: Add `## Origin` section to `README.md`**
 
 Insert after line 3 (after the first descriptive paragraph), before `## 快速开始`:
 
@@ -134,7 +134,7 @@ Insert after line 3 (after the first descriptive paragraph), before `## 快速�
 SDCShield is derived from OpenDCDiag (which contains the Intel `sandstone` framework), licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for full derivation and upstream provenance.
 ```
 
-- [ ] **Step 6: Verify the diffs preserve all Intel copyright headers**
+- [x] **Step 6: Verify the diffs preserve all Intel copyright headers**
 
 ```bash
 git diff LICENSE.3rdparty README.md
@@ -143,7 +143,7 @@ git status --short
 
 Expected: `LICENSE.3rdparty` shows only line 1 changed; no Intel copyright line touched. `NOTICE` and `docs/OPEN_SOURCE_PROVENANCE.md` shown as new files.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add NOTICE LICENSE.3rdparty README.md docs/OPEN_SOURCE_PROVENANCE.md
@@ -174,7 +174,7 @@ Signed-off-by: wangxu <wangxu@example.com>"
 
 **Why the `make-gitid.pl` arg matters:** `framework/meson.build` passes the literal string `'opendcdiag'` as the 3rd arg to `make-gitid.pl`, which uses it as a `git describe --match="opendcdiag-*"` prefix (see `make-gitid.pl:21`). No such tags exist today (`git tag` shows only `v0.0`), so it matches nothing — but it must be renamed in parallel for correctness. The arg is a plain string literal, **not** `get_option('executable_name')`.
 
-- [ ] **Step 1: `meson.build:5` — project name**
+- [x] **Step 1: `meson.build:5` — project name**
 
 ```meson
 project(
@@ -183,14 +183,14 @@ project(
 
 (change `'OpenDCDiag'` → `'SDCShield'`)
 
-- [ ] **Step 2: `meson_options.txt:18-19` — executable_name default**
+- [x] **Step 2: `meson_options.txt:18-19` — executable_name default**
 
 ```meson
 option('executable_name', type : 'string', value : 'sdcshield',
     description : 'Output name of the main binary (default "sdcshield").')
 ```
 
-- [ ] **Step 3: `framework/meson.build:108` — make-gitid.pl match-prefix arg**
+- [x] **Step 3: `framework/meson.build:108` — make-gitid.pl match-prefix arg**
 
 The `command:` array currently has `'opendcdiag',` as a string literal. Change to `'sdcshield',`. Leave the surrounding `'@INPUT0@', '@OUTPUT@',` and `get_option('version_suffix'),` untouched.
 
@@ -204,19 +204,19 @@ The `command:` array currently has `'opendcdiag',` as a string literal. Change t
         ],
 ```
 
-- [ ] **Step 4: `framework/meson.build:113` — the message() string**
+- [x] **Step 4: `framework/meson.build:113` — the message() string**
 
 ```meson
     message('sdcshield: not generating gitid.h -- likely included as subdir')
 ```
 
-- [ ] **Step 5: `Doxyfile:7` — PROJECT_NAME**
+- [x] **Step 5: `Doxyfile:7` — PROJECT_NAME**
 
 ```
 PROJECT_NAME           = "SDCShield"
 ```
 
-- [ ] **Step 6: Reconfigure and build**
+- [x] **Step 6: Reconfigure and build**
 
 ```bash
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup --reconfigure builddir --buildtype=release
@@ -225,7 +225,7 @@ ninja -C builddir
 
 Expected: `ninja` succeeds with zero new errors/warnings. Note: meson project name changed → `meson setup --reconfigure` is **required** (plain ninja won't pick up the project-name / option-default changes, per `CLAUDE.md`).
 
-- [ ] **Step 7: Verify binary renamed and version string**
+- [x] **Step 7: Verify binary renamed and version string**
 
 ```bash
 ls builddir/sdcshield && ls builddir/opendcdiag 2>/dev/null || echo "old name gone (expected)"
@@ -234,7 +234,7 @@ ls builddir/sdcshield && ls builddir/opendcdiag 2>/dev/null || echo "old name go
 
 Expected: `builddir/sdcshield` exists; `builddir/opendcdiag` does not; `--version` prints a line beginning with `sdcshield-`.
 
-- [ ] **Step 8: Regression — run one real test single-threaded**
+- [x] **Step 8: Regression — run one real test single-threaded**
 
 ```bash
 ./builddir/sdcshield -e zstd19 -t 2000 -n 1 -o -
@@ -242,7 +242,7 @@ Expected: `builddir/sdcshield` exists; `builddir/opendcdiag` does not; `--versio
 
 Expected: `result: pass`, exit 0, zero SIGSEGV. (Single-thread avoids the documented Eigen ULP flakiness on 192-CPU systems.)
 
-- [ ] **Step 9: Verify no Intel copyright header touched**
+- [x] **Step 9: Verify no Intel copyright header touched**
 
 ```bash
 git diff meson.build meson_options.txt framework/meson.build Doxyfile
@@ -250,7 +250,7 @@ git diff meson.build meson_options.txt framework/meson.build Doxyfile
 
 Expected: only the string changes above; the `# Copyright 2022 Intel Corporation.` / `SPDX-License-Identifier: Apache-2.0` headers remain.
 
-- [ ] **Step 10: Commit + push**
+- [x] **Step 10: Commit + push**
 
 ```bash
 git add meson.build meson_options.txt framework/meson.build Doxyfile
