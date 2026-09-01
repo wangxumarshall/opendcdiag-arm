@@ -245,7 +245,7 @@ Common command-line options are:
      test time condition is exceeded, or the test-max-loop-count is exhausted.
      The use of --max-test-loop-count disables test fracturing, the default mode
      of test execution in which individual tests are run multiple times with
-     different random seeds during the same invocation of opendcdiag. The value
+     different random seeds during the same invocation of sdcshield. The value
      of 0 for --max-test-loop-count is means no limit to the number of loop
      iterations; it can be used to disable test fracturing.
  --cpuset=<set>, --deviceset=<set>
@@ -1152,7 +1152,7 @@ struct ProgramOptionsParser {
 
     // here we play it simple
     int parse_restricted_command_line(int argc, char** argv, SandstoneApplicationConfig* app_cfg, ProgramOptions& opts) {
-        // Default options for the simplified OpenDCDiag cmdline
+        // Default options for the simplified SDCShield cmdline
         static struct option restricted_long_options[] = {
             { "help", no_argument, nullptr, 'h' },
             { "query", no_argument, nullptr, 'q' },

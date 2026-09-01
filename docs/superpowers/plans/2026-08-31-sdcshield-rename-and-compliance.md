@@ -283,7 +283,7 @@ git push -u origin rename/sdcshield
 - Consumes: Task 2 (binary is `sdcshield`).
 - Produces: no public-API change. The one renamed C symbol `__opendcdiag_pthread_cond_clockwait` → `__sdcshield_pthread_cond_clockwait` is file-scope (static inline + macro redefine), not exported, ABI-neutral.
 
-- [ ] **Step 1: `framework/sandstone_opts.cpp:248` — help text comment**
+- [x] **Step 1: `framework/sandstone_opts.cpp:248` — help text comment**
 
 In the `--max-test-loop-count` help paragraph, change:
 ```
@@ -294,25 +294,25 @@ to:
      different random seeds during the same invocation of sdcshield. The value
 ```
 
-- [ ] **Step 2: `framework/sandstone_opts.cpp:1155` — comment**
+- [x] **Step 2: `framework/sandstone_opts.cpp:1155` — comment**
 
 ```cpp
         // Default options for the simplified SDCShield cmdline
 ```
 
-- [ ] **Step 3: `framework/sandstone.h:139` — doc comment**
+- [x] **Step 3: `framework/sandstone.h:139` — doc comment**
 
 ```
 /// asked to terminate by the SDCShield framework. The second parameter, N, specifies the
 ```
 
-- [ ] **Step 4: `framework/selftest.cpp:71` — exception string (user-visible in crash dumps)**
+- [x] **Step 4: `framework/selftest.cpp:71` — exception string (user-visible in crash dumps)**
 
 ```cpp
         return "SDCShield C++ selftest exception";
 ```
 
-- [ ] **Step 5: `framework/compat/cpp23_polyfill.h` — internal symbol rename**
+- [x] **Step 5: `framework/compat/cpp23_polyfill.h` — internal symbol rename**
 
 Line 59 (function name):
 ```c
@@ -324,13 +324,13 @@ Line 69 (macro):
 ```
 Descriptive comment lines 4, 53, 105, 113 mention "OpenDCDiag" — change those to "SDCShield (derived from OpenDCDiag)" where they describe the project, leaving the technical discussion of `std::barrier`/`pthread_cond` semantics intact.
 
-- [ ] **Step 6: `framework/device/cpu/sysdeps/linux/effective_cpu_freq.hpp:39` — comment**
+- [x] **Step 6: `framework/device/cpu/sysdeps/linux/effective_cpu_freq.hpp:39` — comment**
 
 ```cpp
         // Case of bogus data when, e.g., SDCShield is run unprivileged
 ```
 
-- [ ] **Step 7: Build clean**
+- [x] **Step 7: Build clean**
 
 ```bash
 ninja -C builddir
@@ -338,7 +338,7 @@ ninja -C builddir
 
 Expected: zero new errors. Pre-existing benign warnings (`sysv_abi ignored`, `[[assume]] ignored`, `-Wrestrict` on libstdc++ string internals) are acceptable per `CLAUDE.md`; any warning introduced by this task is a failure.
 
-- [ ] **Step 8: Functional verification — crash backtrace path (exercises selftest.cpp string + binary)**
+- [x] **Step 8: Functional verification — crash backtrace path (exercises selftest.cpp string + binary)**
 
 ```bash
 ./builddir/sdcshield --on-crash=context -e selftest_sigsegv -vv
@@ -346,7 +346,7 @@ Expected: zero new errors. Pre-existing benign warnings (`sysv_abi ignored`, `[[
 
 Expected: child crashes, a backtrace is dumped; the run reports the crash (exit non-zero from the child, overall run handles it). No assertion that the selftest exception string appears here — it is only thrown by `selftest_*` selftest paths; the point is the build runs.
 
-- [ ] **Step 9: Verify no Intel copyright header touched**
+- [x] **Step 9: Verify no Intel copyright header touched**
 
 ```bash
 git diff framework/sandstone_opts.cpp framework/sandstone.h framework/selftest.cpp framework/compat/cpp23_polyfill.h framework/device/cpu/sysdeps/linux/effective_cpu_freq.hpp | grep -E "^-.*Copyright|^-.*SPDX"
@@ -354,7 +354,7 @@ git diff framework/sandstone_opts.cpp framework/sandstone.h framework/selftest.c
 
 Expected: empty output (no removed copyright/SPDX lines).
 
-- [ ] **Step 10: Commit + push**
+- [x] **Step 10: Commit + push**
 
 ```bash
 git add framework/sandstone_opts.cpp framework/sandstone.h framework/selftest.cpp framework/compat/cpp23_polyfill.h framework/device/cpu/sysdeps/linux/effective_cpu_freq.hpp

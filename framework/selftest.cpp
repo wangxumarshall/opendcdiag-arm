@@ -68,7 +68,7 @@ struct SelftestException : std::exception
     SelftestException(int thread = -1) : thread(thread) {}
     const char *what() const noexcept override
     {
-        return "OpenDCDiag C++ selftest exception";
+        return "SDCShield C++ selftest exception";
     }
 };
 

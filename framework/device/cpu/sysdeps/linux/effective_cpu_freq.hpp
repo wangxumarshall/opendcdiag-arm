@@ -36,7 +36,7 @@ public:
     {
         assert(after.cpu_number == before.cpu_number);
 
-        // Case of bogus data when, e.g., OpenDCDiag is run unprivileged
+        // Case of bogus data when, e.g., SDCShield is run unprivileged
         if (before.mperf >= after.mperf || before.aperf >= after.aperf || before.tsc >= after.tsc
                 || before.ns >= after.ns)
             return std::numeric_limits<double>::quiet_NaN();

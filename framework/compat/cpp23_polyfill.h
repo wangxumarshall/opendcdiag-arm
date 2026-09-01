@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // cpp23_polyfill.h — C++23/C++20 标准库缺失符号的 polyfill,仅用于在 GCC<12 的旧
-// openEuler(22.03 / 20.03,GCC 10.x)上构建 OpenDCDiag 的 ARM64 CPU 路径。
+// openEuler(22.03 / 20.03,GCC 10.x)上构建 SDCShield (derived from OpenDCDiag) 的 ARM64 CPU 路径。
 //
 // 设计要点(满足 CLAUDE.md "宏隔离 / 24.03 源码字节一致" 约束):
 //   * 本文件是新增文件,不改任何既有头/源码。
@@ -50,13 +50,13 @@
 // <condition_variable> 之前用宏重定向调用点(关键: 宏必须在 <condition_variable>
 // 被首次包含前定义, 否则头内的调用不会被重写)。
 //   退化语义: 忽略 clockid 参数, 直接用 pthread_cond_timedwait (默认 CLOCK_REALTIME)。
-// 对 OpenDCDiag 的 BarrierDeviceScheduler (std::barrier 底层 condition_variable) 足够。
+// 对 SDCShield 的 BarrierDeviceScheduler (std::barrier 底层 condition_variable) 足够。
 // glibc >= 2.30 或 SP4 的回填版本(头已声明) → __GLIBC_PREREQ(2,30) 为真, 本块不生效。
 // ---------------------------------------------------------------------------
 #if defined(__GLIBC__) && !__GLIBC_PREREQ(2, 30)
 __BEGIN_DECLS
 static inline int __attribute__((unused))
-__opendcdiag_pthread_cond_clockwait(pthread_cond_t *__restrict __cond,
+__sdcshield_pthread_cond_clockwait(pthread_cond_t *__restrict __cond,
                                     pthread_mutex_t *__restrict __mutex,
                                     clockid_t __clk, const struct timespec *__abstime)
 {
@@ -66,7 +66,7 @@ __opendcdiag_pthread_cond_clockwait(pthread_cond_t *__restrict __cond,
 __END_DECLS
 // 必须在 <condition_variable> 被包含前定义此宏, 才能重写头里的调用。
 #  ifndef pthread_cond_clockwait
-#    define pthread_cond_clockwait __opendcdiag_pthread_cond_clockwait
+#    define pthread_cond_clockwait __sdcshield_pthread_cond_clockwait
 #  endif
 #endif /* glibc < 2.30 */
 
@@ -102,7 +102,7 @@ namespace std {
 //   - 构造(count, completion_fn): count 个参与方,每阶段结束调 completion_fn
 //   - arrive_and_wait(): 计数 -1, 到 0 时触发 completion + 重置, 全部唤醒
 //   - arrive_and_drop(): 永久退出(count 永久 -1, 不等待)
-// 语义与 std::barrier<CompletionFunction> 在 OpenDCDiag 的用法上一致
+// 语义与 std::barrier<CompletionFunction> 在 SDCShield 的用法上一致
 // (拓扑 reschedule 的成对/分组同步)。completion_fn 在阶段边界被恰好一次调用。
 // 仅当库未提供时补;GCC11+ 不生效。
 // ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ namespace std {
 namespace std {
 
 // 需要默认构造的 completion function 包装(与 std::barrier<Function> 的 Function 兼容)。
-// OpenDCDiag 用 std::function<void()>, 故 completion 包装存 std::function。
+// SDCShield 用 std::function<void()>, 故 completion 包装存 std::function。
 template <typename _CompletionFunction = std::function<void()>>
 class barrier
 {

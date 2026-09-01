@@ -136,7 +136,7 @@ typedef enum TestQuality {
 #endif
 
 /// to be used in the test_run function of a test.  TEST_LOOP executes its body continuously until it is
-/// asked to terminate by the OpenDCDiag framework. The second parameter, N, specifies the
+/// asked to terminate by the SDCShield framework. The second parameter, N, specifies the
 /// granularity of the loop.  On each iteration of the loop, the body is executed N times.  The
 /// framework then checks to see if the test's time slot has elapsed.  If it has, the loop terminates.
 /// If it has not, the body is executed another N times before another check is made.

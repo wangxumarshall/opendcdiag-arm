@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Usage model for the framework is that it is included by the application
-# (e.g., OpenDCDiag) using Meson's `subdir()` command. This allows for elevating
+# (e.g., SDCShield) using Meson's `subdir()` command. This allows for elevating
 # the framework's code to the directory level of the application.
 # However, this implicitly creates an API contract where the application needs
 # to supply certain variables to the framework before the `subdir()` command is
