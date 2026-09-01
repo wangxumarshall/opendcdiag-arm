@@ -455,14 +455,14 @@ git push
 - Consumes: nothing.
 - Produces: renamed schema files referenced by docs. The yaml `$id` currently points to `https://raw.githubusercontent.com/opendcdiag/opendcdiag/.../opendcdiag-cpu.schema.json` — see Step 3 for the URL decision.
 
-- [ ] **Step 1: git mv the two files**
+- [x] **Step 1: git mv the two files**
 
 ```bash
 git mv docs/opendcdiag-cpu.schema.json docs/sdcshield-cpu.schema.json
 git mv docs/opendcdiag-cpu.schema.yaml docs/sdcshield-cpu.schema.yaml
 ```
 
-- [ ] **Step 2: Update `description` field in both files**
+- [x] **Step 2: Update `description` field in both files**
 
 `docs/sdcshield-cpu.schema.json`:
 ```json
@@ -473,7 +473,7 @@ git mv docs/opendcdiag-cpu.schema.yaml docs/sdcshield-cpu.schema.yaml
 description: SDCShield's output schema for CPUs
 ```
 
-- [ ] **Step 3: Decide the yaml `$id` URL — ASK USER (this is a real decision)**
+- [x] **Step 3: Decide the yaml `$id` URL — ASK USER (this is a real decision)**
 
 `docs/sdcshield-cpu.schema.yaml:2` currently:
 ```yaml
@@ -486,14 +486,14 @@ This is a resolvable schema URL. Options:
 
 Recommended: **(B)** if the GitHub repo will be renamed to `sdcshield`; switch to the Gitee URL in Task 9 (external) once the Gitee repo exists. **DECIDED (2026-09-01): option B** — use `https://raw.githubusercontent.com/wangxumarshall/sdcshield/refs/heads/main/docs/sdcshield-cpu.schema.json`.
 
-- [ ] **Step 4: `.gitignore` — rename the two glob patterns**
+- [x] **Step 4: `.gitignore` — rename the two glob patterns**
 
 ```
 /sdcshield-*.log
 /sdcshield-*.yaml
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 git status --short
@@ -503,7 +503,7 @@ ls docs/sdcshield-cpu.schema.json docs/sdcshield-cpu.schema.yaml
 
 Expected: two `R` (renamed) entries; no `opendcdiag` left in `.gitignore`; new files exist.
 
-- [ ] **Step 6: Commit + push**
+- [x] **Step 6: Commit + push**
 
 ```bash
 git add docs/sdcshield-cpu.schema.json docs/sdcshield-cpu.schema.yaml docs/opendcdiag-cpu.schema.json docs/opendcdiag-cpu.schema.yaml .gitignore

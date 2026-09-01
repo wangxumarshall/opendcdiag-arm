@@ -1,6 +1,6 @@
 $schema: http://json-schema.org/schema#
-#$id: https://raw.githubusercontent.com/opendcdiag/opendcdiag/refs/heads/main/docs/opendcdiag-cpu.schema.json
-description: OpenDCDiag's output schema for CPUs
+#$id: https://raw.githubusercontent.com/wangxumarshall/sdcshield/refs/heads/main/docs/sdcshield-cpu.schema.json
+description: SDCShield's output schema for CPUs
 type: object
 properties:
   command-line:

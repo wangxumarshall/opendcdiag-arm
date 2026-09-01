@@ -1,7 +1,7 @@
 *~
 /local.md
-/opendcdiag-*.log
-/opendcdiag-*.yaml
+/sdcshield-*.log
+/sdcshield-*.yaml
 /total_log_output.yaml
 # forever-patrol loop artifacts (test loop run artifacts, not source)
 /run-all-forever.log
