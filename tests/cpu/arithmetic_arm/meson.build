@@ -138,7 +138,7 @@ crt_sources = files(
 
 # ---------------------------------------------------------------------------
 # Per-library static libraries. Each is added to sandstone_tests so the test
-# objects are linked into the final opendcdiag binary. build_by_default:false
+# objects are linked into the final sdcshield binary. build_by_default:false
 # keeps the objects out of the default ninja target until the main binary pulls
 # them in (matches the pattern used by tests_crc / tests_arm64).
 # ---------------------------------------------------------------------------

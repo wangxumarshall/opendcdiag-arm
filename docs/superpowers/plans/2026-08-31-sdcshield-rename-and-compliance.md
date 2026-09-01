@@ -388,7 +388,7 @@ git push
 - Consumes: Task 2.
 - Produces: no test API change; comment/string edits only.
 
-- [ ] **Step 1: Run a single sed pass scoped to these files, replacing the project brand in comments**
+- [x] **Step 1: Run a single sed pass scoped to these files, replacing the project brand in comments**
 
 Use a targeted replacement that converts `Intel OpenDCDiag` / `OpenDCDiag` → `Intel OpenDCDiag` stays where it describes upstream origin, and bare `OpenDCDiag` (the *project* self-reference) → `SDCShield`. To keep this mechanical and auditable, replace only the exact tokens. First, preview:
 
@@ -400,13 +400,13 @@ Then edit each file's matched lines. Rule:
 - Lines describing "Pattern follows Intel OpenDCDiag's ..." → keep `Intel OpenDCDiag` (descriptive, fair use) **but** change the self-referential `OpenDCDiag convention` → `SDCShield convention`.
 - `tests/cpu/eigen_svd/sandstone_eigen_common.h:14` URL `https://github.com/opendcdiag/opendcdiag/pull/941` — **keep the URL verbatim** (it points to a real upstream PR; changing it breaks the link). Leave this line untouched.
 
-- [ ] **Step 2: `tests/cpu/arithmetic_arm/meson.build:141` comment**
+- [x] **Step 2: `tests/cpu/arithmetic_arm/meson.build:141` comment**
 
 ```meson
 # objects are linked into the final sdcshield binary. build_by_default:false
 ```
 
-- [ ] **Step 3: Build + run a representative ARM64 test**
+- [x] **Step 3: Build + run a representative ARM64 test**
 
 ```bash
 ninja -C builddir
@@ -415,7 +415,7 @@ ninja -C builddir
 
 Expected: `result: pass`, exit 0. (If `adcx_arm` is gated on a feature the host lacks, substitute `zstd19`: `./builddir/sdcshield -e zstd19 -t 2000 -n 1 -o -`.)
 
-- [ ] **Step 4: Verify no Intel copyright header touched + the upstream PR URL preserved**
+- [x] **Step 4: Verify no Intel copyright header touched + the upstream PR URL preserved**
 
 ```bash
 git diff tests/ | grep -E "^-.*Copyright|^-.*SPDX"
@@ -424,7 +424,7 @@ git diff tests/cpu/eigen_svd/sandstone_eigen_common.h
 
 Expected: first command empty; second shows line 14 (the PR URL) unchanged.
 
-- [ ] **Step 5: Commit + push**
+- [x] **Step 5: Commit + push**
 
 ```bash
 git add tests/cpu/arithmetic_arm/ tests/cpu/memory/ tests/cpu/eigen_svd/sandstone_eigen_common.h tests/cpu/crc/zpclmul_rep.cpp

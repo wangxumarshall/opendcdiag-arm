@@ -84,7 +84,7 @@ static void print_colored_result(const char *label, bool passed,
 }
 
 // ============================================================================
-// OpenDCDIAG 测试生命周期函数（所有数据线程局部）
+// SDCShield 测试生命周期函数（所有数据线程局部）
 // ============================================================================
 
 static int zpclmul_rep_init(struct test *test) {

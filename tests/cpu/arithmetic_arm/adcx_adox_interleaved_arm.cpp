@@ -11,7 +11,7 @@
  * both additions using GMP (which uses ADC/ADCS) and compares against the
  * precomputed goldens. Pattern follows Intel OpenDCDiag's Eigen-based design.
  *
- * Logging follows OpenDCDiag convention: pass path is silent; on mismatch the
+ * Logging follows SDCShield convention: pass path is silent; on mismatch the
  * failing inputs (a0,b0,a1,b1) and actual-vs-golden outputs are dumped via
  * log_data() before the thread is marked failed via report_fail_msg().
  * @endparblock
