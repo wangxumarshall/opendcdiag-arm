@@ -1,6 +1,6 @@
 # third-party/rpms
 
-OpenDCDiag (ARM64) 离线构建依赖 RPM 树。
+SDCShield (ARM64, derived from OpenDCDiag) 离线构建依赖 RPM 树。
 
 本目录通过三个 git submodule 聚合 openEuler 各大版本系列的 RPM 树,每系列一个独立子仓(拆分以避开 git 单 pack 2GB 上限):
 
@@ -13,7 +13,7 @@ OpenDCDiag (ARM64) 离线构建依赖 RPM 树。
 ## 结构(submodule)
 
 ```
-opendcdiag-arm (主仓)
+sdcshield (原 opendcdiag-arm, 主仓)
 └── third-party/
     ├── eigen5/               # 仓内 Eigen 5(aarch64 构建用,详见主仓 CLAUDE.md)
     └── rpm/                  # 本目录
@@ -42,4 +42,4 @@ cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3
 | 22.03 | LTS / SP1 / SP2 / SP3 / SP4 | 338 / 336 / 338 / 335 / 333 |
 | 24.03 | LTS / SP1 / SP2 / SP3 / SP4 | 324 / 324 / 324 / 326 / 329 |
 
-> `openEuler-24.03LTS_SP3` 是 OpenDCDiag ARM64 的基准构建版本,所有其他版本取与之同名的包集 + 完整依赖树。详见各子仓 README。
+> `openEuler-24.03LTS_SP3` 是 SDCShield ARM64 的基准构建版本,所有其他版本取与之同名的包集 + 完整依赖树。详见各子仓 README。

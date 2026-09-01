@@ -94,8 +94,8 @@ pkg-config**，因此：
 |---|---|---|
 | 配置 | `meson setup builddir_fb --buildtype=release`（干净 builddir） | 通过；日志中**无** `eigen3` pkg-config 行（走 declare_dependency） |
 | 构建 | `ninja -C builddir_fb` | exit 0；eigen_gemm/svd/jacobi/svd_cdouble_sve 全部编出 |
-| 功能 | `./opendcdiag -e eigen_svd_double -t 2000 -n 1` | `exit: pass` |
-| 回归 | `./opendcdiag -e zstd19 -t 2000 -n 1` | `exit: pass`，无连带破坏 |
+| 功能 | `./sdcshield -e eigen_svd_double -t 2000 -n 1` | `exit: pass` |
+| 回归 | `./sdcshield -e zstd19 -t 2000 -n 1` | `exit: pass`，无连带破坏 |
 | x86 不变 | diff | 改动仅在 `#if aarch64`/`else` 分支，x86 `dependency('eigen3')` 原样保留 |
 
 ## 四、补丁 1 的遗留隐患与收尾方案：补丁 2

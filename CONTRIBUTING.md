@@ -1,11 +1,11 @@
-# Contributing to OpenDCDiag
+# Contributing to SDCShield
 
-OpenDCDiag is an open source project licensed under the [Apache License version 2.0](LICENSE)
+SDCShield is an open source project licensed under the [Apache License version 2.0](LICENSE)
 
 ## Coding Style
 
 Refer to the [CODING STYLE GUIDE](docs/coding_style_guide.md) for general
-guidelines on writing code in OpenDCDiag.
+guidelines on writing code in SDCShield.
 
 ## Certificate of Origin
 
@@ -28,12 +28,12 @@ Once you've finished making your changes push them to your fork and submit the P
 ## Issue tracking
 
 If you have a problem, please let us know. Review [the list of
-issues](https://github.com/opendcdiag/opendcdiag/issues) to see if similar
+issues](https://github.com/wangxumarshall/sdcshield/issues) to see if similar
 problem or request is already documented.
 
 If the issue already exists, review it for completeness and provide any
 additional insight. If the issue is not documented, file [a new
-one](https://github.com/opendcdiag/opendcdiag/issues/new). When reporting
+one](https://github.com/wangxumarshall/sdcshield/issues/new). When reporting
 multiple issues, use one report for each problem observed -- it makes it much
 easier to track them.
 

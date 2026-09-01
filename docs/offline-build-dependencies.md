@@ -1,4 +1,4 @@
-# OpenDCDiag 在 openEuler 24.03 (LTS-SP3) aarch64 上的构建依赖与离线构建指南
+# SDCShield 在 openEuler 24.03 (LTS-SP3) aarch64 上的构建依赖与离线构建指南
 
 > 目标：在一个**最小安全安装**的 openEuler 24.03 SP3 aarch64 上，从零编译构建本仓库（默认 CPU device、ARM64 路径），并支持在**无网络环境**下快速复刻。
 >
@@ -71,7 +71,7 @@ glibc-static                # 全静态链接(-static)时需要 libc.a（默认�
 
 ```bash
 # 1. 创建离线包目录
-mkdir -p ~/opendcdiag-offline && cd ~/opendcdiag-offline
+mkdir -p ~/sdcshield-offline && cd ~/sdcshield-offline
 
 # 2. 下载必装包及其完整依赖树
 #    用 `dnf download` 子命令（不是 `dnf install --downloadonly`）：
@@ -95,7 +95,7 @@ dnf download --resolve --alldeps --destdir=$PWD openssl-devel gtest-devel
 
 ```bash
 # 拷贝整个目录到目标机后：
-cd ~/opendcdiag-offline
+cd ~/sdcshield-offline
 # 直接用 install-deps.sh（它会在 shell 层面过滤掉受保护/无关系统包）：
 ./scripts/offline-build/install-deps.sh .
 # 或手动等价命令（先过滤出构建必需的 RPM，再传给 dnf）：
@@ -109,7 +109,7 @@ sudo dnf install -y --disablerepo=* \
 ### 3.3 构建本项目
 
 ```bash
-cd /path/to/opendcdiag-arm-test2
+cd /path/to/sdcshield-arm-test2
 
 # aarch64 路径：eigen5 仓库自带，无需系统 eigen3
 # PKG_CONFIG_PATH 仅为兼容 x86 路径而保留，aarch64 可省
@@ -117,8 +117,8 @@ meson setup builddir --buildtype=release
 ninja -C builddir
 
 # 验证
-./builddir/opendcdiag --list-tests          # 应列出 ~199 个测试
-./builddir/opendcdiag -e zstd19 -t 2000 -n 1 # 应 exit: pass
+./builddir/sdcshield --list-tests          # 应列出 ~199 个测试
+./builddir/sdcshield -e zstd19 -t 2000 -n 1 # 应 exit: pass
 ```
 
 ### 3.4（可选）启用 OpenSSL SHA 测试
@@ -126,7 +126,7 @@ ninja -C builddir
 ```bash
 meson setup --reconfigure builddir --buildtype=release -Dssl_link_type=dynamic
 ninja -C builddir
-./builddir/opendcdiag --list-tests | grep openssl_sha
+./builddir/sdcshield --list-tests | grep openssl_sha
 ```
 
 ---
@@ -160,7 +160,7 @@ ninja -C builddir
 4. **EPOL 仓未启用**：`libisa-l-devel` 只在 EPOL。离线场景把 RPM 拷过去 `rpm -ivh` 即可绕过仓库检查；或改用 everything 仓的 `libisal-devel`。
 5. **无 git**：无 git 仓库或无 git 命令时，`gitid.h` 仍会生成（脚本 fallback 到占位串），构建不阻断，只是版本号是占位。
 6. **磁盘空间**：完整构建（含 SVE/NEON 多后端）产物约 256 MB 单二进制 + 中间 `.a`，建议 builddir 所在盘预留 ≥ 2 GB。
-7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）、initramfs 链（`dracut`、`os-prober`、`kpartx`、`device-mapper`、`fuse`）及系统核心（`glibc`、`systemd`、`pam`、`setup`、`filesystem`、`basesystem`、`shadow`、`openEuler-release` 等）。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。OpenDCDiag 构建完全不依赖这些包。
+7. **离线安装报"删除受保护包 grub2-efi-aa64"**：`dnf download --resolve --alldeps` 会把整棵依赖树拉全，其中混入 bootloader/固件（`grub2-*`、`shim`、`mokutil`、`efivar`、`efibootmgr`）、initramfs 链（`dracut`、`os-prober`、`kpartx`、`device-mapper`、`fuse`）及系统核心（`glibc`、`systemd`、`pam`、`setup`、`filesystem`、`basesystem`、`shadow`、`openEuler-release` 等）。它们在 openEuler 上受 dnf `protected_packages` 保护，离线 `dnf install ./*.rpm` 时版本若有细微差异，dnf 会视"升级"为"删除受保护包"而拒绝安装。SDCShield 构建完全不依赖这些包。
    **关键坑**：`dnf install --exclude=grub2* ./*.rpm` **无效**——`--exclude` 对命令行显式指定的本地 `.rpm` 文件参数不生效，dnf 会把匹配的 `.rpm` 从候选移除后仍为这些"参数"去仓库找匹配，在 `--disablerepo=*` 下报 `No match for argument: grub2-...rpm`。正确做法是**在 shell 层面过滤文件列表**，只把构建必需的 `.rpm` 传给 dnf。`install-deps.sh` 已内置：按前缀静态排除受保护/无关系统包（`EXCLUDE_RE`），再跳过目标机已装同版本包（`skip_if_installed`），最后拓扑排序（见坑点 8）后传给 dnf。
 
 8. **OS 版本管控 + 依赖拓扑排序**：离线构建的根因性坑是**下载机与目标机 openEuler 版本不一致**（如 SP3 下载、SP4 目标）。这会引发两类无法兜底的冲突：降级冲突（`audit-libs`/`openssl-libs`/`rpm` 等旧版替换新版）和 `glibc-devel` 精确版本依赖死结（SP3 `glibc-devel` `Requires: glibc = 2.38-84.sp3`，装到 SP4 要求降级受保护的 glibc，不装则 gcc 缺依赖）。

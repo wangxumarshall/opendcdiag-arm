@@ -2,7 +2,7 @@
 applyTo: "tests/**"
 ---
 
-OpenDCDiag tests follow a rigid pattern and are declared with the
+SDCShield tests follow a rigid pattern and are declared with the
 DECLARE_TEST macro, which takes a name and description, a required run
 function (`test_run`), and optional `test_init` and `test_cleanup`
 functions. The optional `test_cleanup` function can be provided for tests

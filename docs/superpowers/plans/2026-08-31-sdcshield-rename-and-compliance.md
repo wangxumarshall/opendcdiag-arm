@@ -726,13 +726,13 @@ git push
 3. **Historical/diagnostic report mentions** in `docs/cases/**` and `docs/*CORE179*` / `MOVBE_*` / `OFHC_*` where `opendcdiag` appears as a *run command in a past diagnosis* — keep the brand in prose where it describes what was *historically run*, but update the command examples to `sdcshield` if a reader would copy-paste them. If unsure, prefer changing the command token and leaving prose `OpenDCDiag` (descriptive fair use).
 4. **External links** to upstream `github.com/opendcdiag/opendcdiag` / `github.com/wangxumarshall/opendcdiag-arm` — keep verbatim where they are *real source links* (the arm port repo URL changes only after the GitHub rename in Task 9). `SECURITY.md:3` `https://github.com/opendcdiag/opendcdiag/issues` — **DECIDED (2026-09-01): replace with our repo's issue tracker**: `https://github.com/wangxumarshall/sdcshield/issues`.
 
-- [ ] **Step 1: Preview remaining surface**
+- [x] **Step 1: Preview remaining surface**
 
 ```bash
 grep -ril "opendcdiag\|OpenDCDiag" --include="*.md" . | grep -v "\.git/"
 ```
 
-- [ ] **Step 2: Edit `CLAUDE.md`**
+- [x] **Step 2: Edit `CLAUDE.md`**
 
 The CLAUDE.md lines 19–27, 32, 89, 111 reference `builddir/opendcdiag` and `OpenDCDiag`. Change:
 - Line 7 first sentence: keep `Forked from Intel's OpenDCDiag` (descriptive, fair use) but change project self-reference `OpenDCDiag is a CPU/system...` → `SDCShield is a CPU/system...`.
@@ -740,7 +740,7 @@ The CLAUDE.md lines 19–27, 32, 89, 111 reference `builddir/opendcdiag` and `Op
 - Line 89: `not an OpenDCDiag bug` → `not an SDCShield bug`.
 - Line 111: `./builddir/opendcdiag` → `./builddir/sdcshield`.
 
-- [ ] **Step 3: Edit `README.md` remaining references**
+- [x] **Step 3: Edit `README.md` remaining references**
 
 - Line 1 title `# OpenDCDiag-ARM` → `# SDCShield`.
 - Line 3 `OpenDCDiag-ARM is ...` → `SDCShield is ... derived from Intel's OpenDCDiag (ARM64 port).`.
@@ -749,11 +749,11 @@ The CLAUDE.md lines 19–27, 32, 89, 111 reference `builddir/opendcdiag` and `Op
 - Line 52: `./opendcdiag-rpms/` → `./sdcshield-rpms/`.
 - Line 91: `exec run-opendcdiag.sh` → `exec run-sdcshield.sh`.
 
-- [ ] **Step 4: Edit remaining docs per the rules above**
+- [x] **Step 4: Edit remaining docs per the rules above**
 
 For each file in the list, apply rules 1–4. Use the grep output from Step 1 to drive line-by-line edits.
 
-- [ ] **Step 5: Verify no orphaned actionable `opendcdiag` tokens remain**
+- [x] **Step 5: Verify no orphaned actionable `opendcdiag` tokens remain**
 
 ```bash
 grep -rin "opendcdiag" README.md CLAUDE.md CONTRIBUTING.md SECURITY.md docs/writing_tests.md docs/coding_style_guide.md docs/multi-version-build-deploy.md docs/multi-version-build-deploy-usermanual.md docs/offline-build-dependencies.md .github/copilot-instructions.md
@@ -761,7 +761,7 @@ grep -rin "opendcdiag" README.md CLAUDE.md CONTRIBUTING.md SECURITY.md docs/writ
 
 Expected: only (a) submodule/upstream repo URLs, (b) the `SECURITY.md` upstream issues URL, or (c) explicit `derived from OpenDCDiag` phrases. No `builddir/opendcdiag`, `run-opendcdiag.sh`, or bare project-self-reference.
 
-- [ ] **Step 6: Commit + push**
+- [x] **Step 6: Commit + push**
 
 ```bash
 git add README.md CLAUDE.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md docs/ .github/copilot-instructions.md .github/instructions/

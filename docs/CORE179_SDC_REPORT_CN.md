@@ -3,7 +3,7 @@
 **日期**:2026-08-20
 **状态**:跨路径确证完成,位翻转规律量化,缺陷定位到 load/store 通路
 **目标机器**:192 核 aarch64(8 NUMA 节点 × 24 核),Linux 6.6.0-145,package 19062
-**测试框架**:`opendcdiag`(meson+ninja,`builddir/opendcdiag`),Eigen 3.4.0
+**测试框架**:`opendcdiag`(当时名,现名 sdcshield; meson+ninja,`builddir/opendcdiag`),Eigen 3.4.0
 **触发配置**:全核心(无 taskset)+ 自动 seed(无 `-s`)+ `--max-test-loop-count=0`(seed 在窗口内固定)+ `-t 15m`
 
 ---

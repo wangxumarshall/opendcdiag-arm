@@ -1,10 +1,10 @@
-# A Guide to Writing OpenDCDiag tests
+# A Guide to Writing SDCShield tests
 
-This guide explains how to write tests for the OpenDCDiag framework.
+This guide explains how to write tests for the SDCShield framework.
 
 ## A first test
 
-OpenDCDiag tests are written in C, C++, and occasionally in assembly language.
+SDCShield tests are written in C, C++, and occasionally in assembly language.
 Simple tests consist of a single source file that contains a declarative
 section, providing the framework with information about the test, and a
 number of function calls that implement the test.
@@ -62,10 +62,10 @@ END_DECLARE_TEST
 ```
 
 The test begins with a comment containing the test name and a description of the
-test. Each OpenDCDiag test is expected to contain such a comment providing some
+test. Each SDCShield test is expected to contain such a comment providing some
 information about what the test does and how it operates. The comment is
 followed by some global variables\*, two static functions, and a declarative
-section that registers the test with the OpenDCDiag framework.
+section that registers the test with the SDCShield framework.
 
 :warning: \* Normally, it is not good practice to store test-specific data in global
   variables.  The reason for this and an alternative method for managing test
@@ -77,15 +77,15 @@ A new test is declared using the DECLARE_TEST macro. The first parameter is a te
 Test names must be unique, are never changed once the test is merged, and should
 also match the test name specified in the test description comment. The test name is
 followed by a one-line description of the test. The DECLARE_TEST macro defines a new
-instance of an OpenDCDiag *test* structure, which is documented in
+instance of an SDCShield *test* structure, which is documented in
 [sandstone.h](../framework/sandstone.h). The *test* structure contains a number
-of fields that tests can set to provide the OpenDCDiag framework with
+of fields that tests can set to provide the SDCShield framework with
 information about the test. Our simple test sets three of these fields, each of
 which will be explained below. For now, let's build and run our test.
 
 ### Building and running the test
 
-To build the test, we need to add it to the OpenDCDiag build system. This can be
+To build the test, we need to add it to the SDCShield build system. This can be
 done by modifying the [tests/meson.build](../tests/meson.build) file in the tests
 directory. Add the following lines to this file after the last `tests_set_base.add`
 block and rebuild.
@@ -97,11 +97,11 @@ tests_set_base.add(
 ```
 
 Now let's check to see if our test is available. A list of tests can be
-obtained by passing the --list to the opendcdiag binary. Let's search for
+obtained by passing the --list to the sdcshield binary. Let's search for
 our test by name.
 
 ```console
-./opendcdiag --beta --list
+./sdcshield --beta --list
 ```
 
 You should see a list of test names and their descriptions. Somewhere in this
@@ -114,8 +114,8 @@ list there should be a line that looks something like this.
 To run the test, type
 
 ```
-./opendcdiag --beta -v -e simple_add --output-format=tap
-# opendcdiag --beta -v -e simple_add --output-format=tap
+./sdcshield --beta -v -e simple_add --output-format=tap
+# sdcshield --beta -v -e simple_add --output-format=tap
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: LCG:560936296
 ok   1 simple_add               # (beta test)
@@ -141,9 +141,9 @@ the following to our test declaration
         .quality_level = TEST_QUALITY_BETA,
 ```
 
-By default, OpenDCDiag only runs production tests when executed, i.e., tests
+By default, SDCShield only runs production tests when executed, i.e., tests
 with a *quality_level* of *TEST_QUALITY_PROD*. Why then did we label our new
-test as a beta test?  This is an OpenDCDiag convention. New tests always
+test as a beta test?  This is an SDCShield convention. New tests always
 have their quality level set to *TEST_QUALITY_BETA*. After they have been merged
 for a while and have executed without issue, their status is upgraded to
 *TEST_QUALITY_PROD*.
@@ -154,11 +154,11 @@ The test should have run and passed multiple times.
 Each test is given a time slot in which it can run. By default, this time slot
 is one second, but this default can be overridden in the test declaration using
 the *desired_duration*, *minimum_duration*, and *maximum_duration* fields.  By
-default, the OpenDCDiag framework continually runs a test until its
+default, the SDCShield framework continually runs a test until its
 allocated time period has elapsed. Each test invocation is run in its own
 process with a different random number seed. Assuming that the test uses random
 numbers, as our simple test does, each invocation of the test performs
-a different computation. This feature of OpenDCDiag is referred to as
+a different computation. This feature of SDCShield is referred to as
 fracturing and is the reason that you see the test being run multiple times.
 Fracturing is enabled by default for all tests but it can be disabled on a test-
 by-test basis by specifying a value of less than 0 for the *fracture_loop_count*
@@ -166,12 +166,12 @@ field when declaring a test. It may make sense to disable fracturing if you
 only want your test to run once for some reason or if your init function (see
 below) is very expensive.  It is also possible to disable fracturing from the
 command line using the --max-test-loop-count option.  Specifying this option on
-the opendcdiag command line and setting it to 0, e.g.,
---max-test-loop-count=0, disables fracturing for that run of opendcdiag.
+the sdcshield command line and setting it to 0, e.g.,
+--max-test-loop-count=0, disables fracturing for that run of sdcshield.
 
 ### Test execution
 
-When running a test, the OpenDCDiag performs the following steps (by default):
+When running a test, the SDCShield performs the following steps (by default):
 
 1. It creates a new process.
 2. It calls the test's test_init function on the main thread of the new process.
@@ -201,7 +201,7 @@ framework via the call to report_fail_msg. In addition to signaling and
 logging an error, report_fail_msg causes the thread to exit. Our computation
 and comparison are executed repeatedly in a loop, generated by the TEST_LOOP
 macro. TEST_LOOP executes its body continuously until it is asked to terminate
-by the OpenDCDiag framework. The second parameter to TEST_LOOP specifies the
+by the SDCShield framework. The second parameter to TEST_LOOP specifies the
 granularity of our loop. In our simple_add test, we set the granularity to 1 <<
 20. TEST_LOOP will perform 1 << 20 iterations and then ask the framework whether it's okay
 to continue executing.  If there is some more time left in the test's time slot
@@ -209,12 +209,12 @@ TEST_LOOP performs another 1 << 20 iterations before checking with the
 framework again. The process continues until the framework asks the test to
 exit. If all instances of the test's test_run functions exit without error, the
 test passes. By convention, the second parameter to TEST_LOOP is always a
-power of two. The OpenDCDiag framework includes a facility to help test writers
+power of two. The SDCShield framework includes a facility to help test writers
 select an appropriate value for the second parameter of TEST_LOOP. For more
 information, see the [Test Tuning](#test-tuning) section below.
 
 Our simple_add test is trivial and is unlikely to detect any real
-problems. It does, however, illustrate the pattern used by most OpenDCDiag
+problems. It does, however, illustrate the pattern used by most SDCShield
 tests. It computes a golden value in the *test_init* function, and then recomputes
 that value in the test_run function that is executed on multiple hardware threads. The
 values computed by the test_run functions are compared to the initial golden
@@ -225,28 +225,28 @@ value and, if there is a mismatch, an error is reported.
 
 Random numbers in simple_add are generated using a framework function called
 random32 that returns a random number using the random number generator selected
-for this invocation of OpenDCDiag. OpenDCDiag uses a number of different
+for this invocation of SDCShield. SDCShield uses a number of different
 random number generators and information about the generator used for any given
-invocation is output when OpenDCDiag is run. Returning to the example output of our
-OpenDCDiag invocation above, we see
+invocation is output when SDCShield is run. Returning to the example output of our
+SDCShield invocation above, we see
 
 ```
-# opendcdiag --beta -v -e simple_add --output-format=tap
+# sdcshield --beta -v -e simple_add --output-format=tap
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: LCG:560936296
 ```
 
 By default a different random number generator and seed is chosen each time
-OpenDCDiag is run. However, this behavior can be overridden by specifying the
+SDCShield is run. However, this behavior can be overridden by specifying the
 -s command line options. For example,
 
 ```
-./opendcdiag --beta -v -s LCG:560936296 -e simple_add  --output-format=tap
+./sdcshield --beta -v -s LCG:560936296 -e simple_add  --output-format=tap
 ```
 
 results in a new invocation of simple_add that performs the exact same set
 of computations as our original invocation. This is an important feature of the
-OpenDCDiag framework as it allows failed tests that use random numbers to be
+SDCShield framework as it allows failed tests that use random numbers to be
 replayed using the same data. For this reason, it is important that tests use
 the random number functions provided by the framework. The framework provides a
 rich set of random number generating functions for a variety of types. These
@@ -260,7 +260,7 @@ using the framework and hence reproducible.
 
 ## A second test
 
-Now that we've covered the basics of creating an OpenDCDiag test, let's try something
+Now that we've covered the basics of creating an SDCShield test, let's try something
 a little bit more complex. Our new test is still going to test the system's
 ability to add numbers, but rather than adding two numbers per thread on each
 iteration of the test, we're going to add 1024 numbers, and we're going to do the
@@ -359,7 +359,7 @@ DECLARE_TEST(vector_add, "Repeatedly add arrays of unsigned integers using AVX-5
 END_DECLARE_TEST
 ```
 
-This new test makes more use of the OpenDCDiag framework than the first test
+This new test makes more use of the SDCShield framework than the first test
 and we'll discuss each of the differences below. First, however, let's build
 it. This can be done by adding the following lines to the
 [meson.build](../tests/meson.build) file in the tests directory after the last
@@ -380,13 +380,13 @@ Intel® Advanced Vector Extensions 512 (Intel® AVX-512)
 intrinsics and will only build if our test source file is compiled with the
 correct compiler options, in this case -march=skylake-avx512. This command line
 option is not specified when compiling the files added to tests_base_set. It
-follows then that not all the source files in an OpenDCDiag build are compiled
+follows then that not all the source files in an SDCShield build are compiled
 with the same compile options and this has some implications.
 
 1. The framework and tests added to tests_base_set are compiled with
 -march=haswell by default.  This default can be overridden via the march_base
 meson option.
-2. The OpenDCDiag binary is only guaranteed to run correctly on machines that
+2. The SDCShield binary is only guaranteed to run correctly on machines that
 support the base architecture or greater. If run on older machines, it will
 crash with SIGILL.
 3. Test writers adding new tests that use features of the CPU not present in
@@ -401,25 +401,25 @@ issue for C++ tests that might define a global static instance of a class that
 has a constructor. The compiler may generate code for the constructor that uses
 instructions that are not present in the base architecture, and as this code is
 run at program startup before the framework itself starts, the framework cannot
-prevent it from executing. The end result could be that OpenDCDiag would fail
+prevent it from executing. The end result could be that SDCShield would fail
 to start when run on a machine that just supported the base architecture. For this reason,
-global statics are not allowed in OpenDCDiag tests. Note that some of the C++
+global statics are not allowed in SDCShield tests. Note that some of the C++
 standard library header files define global statics, e.g., \<iostream\>, so the
-inclusion of such files in OpenDCDiag tests is not permitted.
+inclusion of such files in SDCShield tests is not permitted.
 
 ### Running vector_add
 
-We run our new test using the opendcdiag command as before specifying our new
+We run our new test using the sdcshield command as before specifying our new
 test name
 
 ```
-./opendcdiag --beta -v -e vector_add --output-format=tap
+./sdcshield --beta -v -e vector_add --output-format=tap
 ```
 
 and the result should be something like this.
 
 ```
-# opendcdiag --beta -v -e vector_add --output-format=tap
+# sdcshield --beta -v -e vector_add --output-format=tap
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: LCG:112841597
 ok   1 vector_add               # (beta test)
@@ -434,7 +434,7 @@ and passed.  When run on a machine that does not support Intel AVX-512 you shoul
 something like this.
 
 ```
-# opendcdiag --beta -v -e vector_add --output-format=tap
+# sdcshield --beta -v -e vector_add --output-format=tap
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: LCG:1332445696
 ok   1 vector_add               # (beta test) SKIP
@@ -442,13 +442,13 @@ ok   2 mce_check
 exit: pass
 ```
 
-The OpenDCDiag framework knows that our test requires Intel AVX-512 and it also knows that the
+The SDCShield framework knows that our test requires Intel AVX-512 and it also knows that the
 machine it is being run on doesn't support this feature, so it skips the test.
 If it ran the test, the test would crash.
 
 ### Minimum CPU
 
-How does the OpenDCDiag framework know our test requires Intel AVX-512? It knows
+How does the SDCShield framework know our test requires Intel AVX-512? It knows
 because we advertised this fact the in the DECLARE_TEST macro.
 
 ```c
@@ -472,12 +472,12 @@ ensures that the size of the memory being allocated is a multiple of the
 requested alignment, a requirement of *aligned_alloc*. If it is not, the size
 of the requested memory is increased so that the constraints of *aligned_alloc*
 are met. Note that the test does not check the return value of any of the
-memory allocation functions. The reason for this is that the OpenDCDiag
+memory allocation functions. The reason for this is that the SDCShield
 framework actually overrides the standard C library and Posix memory allocation
 functions, so that any allocation failure results in the calling thread
 exiting. The overridden functions also fill the allocated memory with zeros
 before returning, so there is no need to memset dynamically allocated buffers to
-zero in OpenDCDiag tests.
+zero in SDCShield tests.
 
 The *test_init* function allocates three buffers. These buffers are 64-byte
 aligned as required by the *prv_do_add* function that actually performs the
@@ -494,9 +494,9 @@ data whose lifetime matches that of the test, i.e., data that needs to be
 available in both the *test_init* and *test_run* functions. It provides a
 better alternative to using global statics as was done in the first example.
 Global statics can cause problems with tests written in C++ as we have seen. In
-addition, as all the OpenDCDiag tests are built into one executable, the costs of
+addition, as all the SDCShield tests are built into one executable, the costs of
 global static data introduced by one test are borne by all tests and the main
-OpenDCDiag process itself, even if the test that created the global static data
+SDCShield process itself, even if the test that created the global static data
 is never actually run.**
 
 The dynamically-allocated data is freed in the *test_cleanup* function. This
@@ -508,7 +508,7 @@ function when a test completes. The reason is that each invocation of a test is
 run in a separate process that exits directly after *test_cleanup* is run.
 Any memory not freed by the test is reclaimed by the OS once the test completes.
 Thus, it's not really possible for a test to leak memory in a way that affectn
-the main OpenDCDiag process or any of the other tests it runs. There is
+the main SDCShield process or any of the other tests it runs. There is
 one exception though, test slicing, which is discussed below.
 
 ### memcmp_or_fail
@@ -516,7 +516,7 @@ one exception though, test slicing, which is discussed below.
 Our new test performs the same vectorized additions on the same data on each
 thread. To determine if the test has passed, we need to compare the
 results computed in the *test_run* function to the golden result computed in the
-*test_init* function. The OpenDCDiag framework provides a convenience function
+*test_init* function. The SDCShield framework provides a convenience function
 for performing this comparison; memcmp_or_fail. memcmp_or_fail accepts at
 least three parameters in the following order; the newly computed data, the
 expected data, and the number of elements to compare. The interesting thing
@@ -530,7 +530,7 @@ memcmp_or_fail detects an error, it stops the normal execution of the
 current thread. The attentive reader may notice that if this were to happen, we
 would actually leak the *res* buffer, but as the test has failed, its process
 is terminated and the memory is reclaimed by the OS. This sort of
-memory leak is acceptable in OpenDCDiag code.
+memory leak is acceptable in SDCShield code.
 
 
 If your test contains multiple calls to *memcmp_or_fail* that compare the same
@@ -546,16 +546,16 @@ that format string. Here's an example from the zstd test.
 
 ### Logging
 
-By default, OpenDCDiag creates a log file and writes to that log file as it
+By default, SDCShield creates a log file and writes to that log file as it
 executes the tests. Information about the results of the tests plus any
 additional information the tests log is output to the log file. If the
-entire test run succeeds without error, OpenDCDiag deletes the log file.  If
+entire test run succeeds without error, SDCShield deletes the log file.  If
 you'd like to preserve the logfile you can use the -o parameter to provide an
-explicit log file name. OpenDCDiag will not remove log files specified with the
+explicit log file name. SDCShield will not remove log files specified with the
 -o parameter, even when there is no error. It is also possible to get
-OpenDCDiag to log to standard output with '-o -'.  This is useful when debugging.
+SDCShield to log to standard output with '-o -'.  This is useful when debugging.
 
-At this stage, it's instructive to look at what an OpenDCDiag test looks like
+At this stage, it's instructive to look at what an SDCShield test looks like
 when it fails.  Let's modify our *test_run* function to induce a failure by
 adding the following two lines
 
@@ -569,10 +569,10 @@ adding the following two lines
 
 These two lines corrupt the computed result in the first test thread. This
 causes the call to memcmp_or_fail to fail and log an error. If you re-build
-and re-run openDCDiag, e.g., by typing
+and re-run sdcshield, e.g., by typing
 
 ```
-./opendcdiag --beta -e vector_add -o -
+./sdcshield --beta -e vector_add -o -
 ```
 
 you should see something like this on your screen.
@@ -601,19 +601,19 @@ you should see something like this on your screen.
 ```
 
 You should also see that the test has been re-run by the framework and that it
-consistently fails. When a test fails, OpenDCDiag re-runs the test in an
+consistently fails. When a test fails, SDCShield re-runs the test in an
 attempt to discover whether the failure is specific to a core or a hardware
 thread. In this case, it is because we've deliberately induced a failure on the
-first hardware thread discovered by OpenDCDiag.
+first hardware thread discovered by SDCShield.
 
-In addition to memcmp_or_fail, the OpenDCDiag has some additional logging
+In addition to memcmp_or_fail, the SDCShield has some additional logging
 functions that can be used. Among these functions are *log_skip*, *log_debug*, *log_info*,
 *log_warning* and *log_error*. They all behave like printf and are declared in
-[sandstone.h](../framework/sandstone.h). OpenDCDiag also provides an additional
+[sandstone.h](../framework/sandstone.h). SDCShield also provides an additional
 function that is useful for logging binary data, *log_data*, also declared and
 documented in [sandstone.h](../framework/sandstone.h).
 
-There is one golden rule of logging in OpenDCDiag tests. Tests are only allowed
+There is one golden rule of logging in SDCShield tests. Tests are only allowed
 to log information on their error paths.  A test that completes successfully
 should not write any additional information to the logs. It is appropriate to
 use the log functions to log information on the non-error paths during a test's
@@ -622,13 +622,13 @@ one exception here are *log_debug* statements. These statements can be included
 in the non-error paths of production tests, but they only generate output on
 debug builds (they are compiled out of release builds).
 
-By default, OpenDCDiag limits the amount of log statements that each test
+By default, SDCShield limits the amount of log statements that each test
 invocation can make. By default this value is set to five.  If a test has already
 issued five log statements, its sixth and subsequent log statements will be ignored
 and will not appear in the logs. The framework also limits the amount of data
 that can be logged with the *log_data* function, by default, to 128 bytes.  If
 then, your logs are truncated, specify the --max-messages and
---max-logdata parameters when executing opendcdiag. Both these options take an
+--max-logdata parameters when executing sdcshield. Both these options take an
 integer parameter. Setting this parameter to zero removes all limits.
 
 One final note about logging. Any data written to standard output is
@@ -642,22 +642,22 @@ writing to standard error directly.
 
 ### Test groups
 
-OpenDCDiag allows test writers to assign their tests to one or
+SDCShield allows test writers to assign their tests to one or
 more groups. Tests in the same group share some characteristics. For
 example, they may all focus on one part of a CPU's architecture or
 they may all employ the same sort of testing techniques. The nice
 thing about assigning a test to a group is that you can easily run or
 exclude all the tests in a group using simple command line options.
-OpenDCDiag currently defines a number of groups. These can be seen by
+SDCShield currently defines a number of groups. These can be seen by
 running the following command.
 
 ```
-./opendcdiag --list-groups
+./sdcshield --list-groups
 @compression
 @math
 ```
 
-To view the tests that form part of each group, run the opendcdiag
+To view the tests that form part of each group, run the sdcshield
 command with the --list option. This lists all the tests and outputs
 some information about the defined test groups.  Example
 group information output by this option is presented below.
@@ -693,8 +693,8 @@ have already seen, but rather than specifying a test name, we specify a
 group name. For example we can run all the compression tests as follows:
 
 ```
-./opendcdiag -v -e @compression --output-format=tap
-# opendcdiag -v -e @compression --output-format=tap
+./sdcshield -v -e @compression --output-format=tap
+# sdcshield -v -e @compression --output-format=tap
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: LCG:345873330
 ok   1 zstd_aaa
@@ -728,7 +728,7 @@ following line to our test declaration
 +        .groups = DECLARE_TEST_GROUPS(&group_math),
 ```
 
-If we rebuild and run OpenDCDiag once more with the --beta and --list
+If we rebuild and run SDCShield once more with the --beta and --list
 option, we should see that simple_add has been added to the math
 group.
 
@@ -740,7 +740,7 @@ To add a new group, modify this file.
 
 ### Skipping tests
 
-We've seen that the OpenDCDiag framework can automatically skip tests that make
+We've seen that the SDCShield framework can automatically skip tests that make
 use of instructions that are not supported on the test machine. To take
 advantage of this facility, test writers need to fill in the *minimum_cpu*
 field.  There may, however, be other reasons that a test cannot be run on a
@@ -803,8 +803,8 @@ meson builddir -Dbuildtype=debugoptimized
 Next, let's re-run our first test with this option enabled.
 
 ```
-./opendcdiag --beta -v -e simple_add --output-format=tap --test-tests
-# opendcdiag --beta -v -e simple_add --output-format=tap --test-tests
+./sdcshield --beta -v -e simple_add --output-format=tap --test-tests
+# sdcshield --beta -v -e simple_add --output-format=tap --test-tests
 # Operating system: Linux 5.14.2-arch1-2
 # Random generator state: AES:0a79e69180729ce1a9069ee561104850f586196e7f8d631e56f9611a9eefb7af
 ok   1 simple_add               # (beta test)
@@ -831,7 +831,7 @@ tests:
 # Test failed 1 out of 1 times (100.0%)
 ```
 
-We sped up our test loop by 1024 times and the OpenDCDiag framework is
+We sped up our test loop by 1024 times and the SDCShield framework is
 informing us that it is now too fast. When run without the
 --test-tests option, the test will still pass. Interestingly, the
 framework is recommending that our sped-up test loop be slowed down by
@@ -849,7 +849,7 @@ needed for tests that disable fracturing.
 ### CPU info
 
 Sometimes tests need access to information about the cores, threads and packages
-on which they run. The OpenDCDiag makes this information available via its
+on which they run. The SDCShield makes this information available via its
 API.
 
 #### num_cpus
@@ -858,15 +858,15 @@ It provides a function called *num_cpus* which returns the number of
 hardware threads the current invocation of the test will be run on. Normally,
 this is equal to the number of hardware threads in the machine under test, but
 this is not always the case; if for example, the test uses slicing (see below),
-the user specified the --cpuset parameter when executing opendcdiag, or the OS
-restricts the number of threads that are visible to OpenDCDiag in some way. The
+the user specified the --cpuset parameter when executing sdcshield, or the OS
+restricts the number of threads that are visible to SDCShield in some way. The
 *num_cpus* function can be called in the *test_init*, *test_run* and
 *test_cleanup* functions.
 
 #### device_info and cpu
 
 The *test_run* function's second parameter, *cpu*, has not been been discussed
-in much detail until now. This parameter is an OpenDCDiag specific identifier
+in much detail until now. This parameter is an SDCShield specific identifier
 that identifies the hardware thread on which the current instance of the
 *test_run* function is executing. It will always be greater than or equal to zero
 and less than the value returned by *num_cpus*. It can be used as an index into
@@ -880,7 +880,7 @@ version microcode the thread is running.
 
 ### Slicing
 
-By default, when running a test, OpenDCDiag creates a new process, calls the
+By default, when running a test, SDCShield creates a new process, calls the
 *test_init* function on the main thread of that process, creates a new software
 thread for each hardware thread visible to it and then executes the *test_run*
 function on each of these threads. This model of execution does not suit all
@@ -925,20 +925,20 @@ process.
 
 ### Debugging tests
 
-Each OpenDCDiag test is run in its own separate process as we have seen. This
+Each SDCShield test is run in its own separate process as we have seen. This
 can make debugging of tests with a debugger a little tricky. For this
-reason, OpenDCDiag contains a development option, --fork-mode. Setting the
-value of this option to "no" forces OpenDCDiag to run tests in its own process.
+reason, SDCShield contains a development option, --fork-mode. Setting the
+value of this option to "no" forces SDCShield to run tests in its own process.
 
-Another aspect of the way the OpenDCDiag frameworks works that can complicate
+Another aspect of the way the SDCShield frameworks works that can complicate
 debugging is the way that it runs the *test_run* function multiple times in
 parallel on different threads. If you need to debug and step through the
-*test_run* function, it's probably easiest to limit OpenDCDiag to a single thread.
+*test_run* function, it's probably easiest to limit SDCShield to a single thread.
 This can be achieved using the -n option. Thus a typical command line for
 debugging a test might be.
 
 ```console
-gdb --args ./opendcdiag --beta -e vector_add --fork-mode=no -n1
+gdb --args ./sdcshield --beta -e vector_add --fork-mode=no -n1
 ```
 
 The framework also provides support for debugging hung tests. By default the
@@ -946,7 +946,7 @@ framework will kill tests that have not responded after 5 minutes. You'll
 probably see something like this in your logs when a test hangs
 
 ```
-# opendcdiag --beta -v -e simple_add --output-format=tap
+# sdcshield --beta -v -e simple_add --output-format=tap
 # Operating system: Linux 5.8.0-63-generic
 # Random generator state: LCG:1315282236
 not ok   1 simple_add           # (beta test) timed out
@@ -965,8 +965,8 @@ test. This option may require administrator privileges to work.
 
 ### sandstone.h
 
-OpenDCDiag's public API can be found in
+SDCShield's public API can be found in
 [sandstone.h](../framework/sandstone.h). Most of the functions and structures
 in this file are documented. Readers should consult
-[sandstone.h](../framework/sandstone.h) for information about OpenDCDiag's API
+[sandstone.h](../framework/sandstone.h) for information about SDCShield's API
 that is not covered in this guide.
