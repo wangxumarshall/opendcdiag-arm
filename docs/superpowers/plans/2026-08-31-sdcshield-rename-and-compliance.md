@@ -876,14 +876,14 @@ git push
 
 - [ ] **Step 7: openEuler import readiness checklist**
 
-- [ ] `NOTICE` present and references Intel upstream + ARM64 port URL.
-- [ ] `LICENSE` is full Apache-2.0 (untouched).
-- [ ] `LICENSE.3rdparty` retains all 3rd-party entries (forkfd etc.) verbatim.
-- [ ] No `Copyright ... Intel` line removed in any file (`git log -p` spot-check).
-- [ ] Git history preserved (no squash of Intel commits).
-- [ ] Every new commit has `Signed-off-by:` (DCO).
+- [x] `NOTICE` present and references Intel upstream + ARM64 port URL.
+- [x] `LICENSE` is full Apache-2.0 (untouched).
+- [x] `LICENSE.3rdparty` retains all 3rd-party entries (forkfd etc.) verbatim.
+- [x] No `Copyright ... Intel` line removed in any file (`git log -p` spot-check).
+- [x] Git history preserved (no squash of Intel commits).
+- [x] Every new commit has `Signed-off-by:` (DCO).
 - [ ] openEuler CLA signed (contributor-side, outside repo).
-- [ ] `docs/OPEN_SOURCE_PROVENANCE.md` written (Task 1).
+- [x] `docs/OPEN_SOURCE_PROVENANCE.md` written (Task 1).
 
 ---
 
