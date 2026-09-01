@@ -1,0 +1,13 @@
+SDCShield
+Copyright (c) 2026 openEuler Community
+
+This project SDCShield is derived from OpenDCDiag, which contains the
+sandstone framework originally developed by Intel Corporation.
+
+Original upstream (Intel):
+  https://github.com/intel/OpenDCDiag
+ARM64 port source:
+  https://github.com/wangxumarshall/opendcdiag-arm
+Original License: Apache License 2.0
+
+The original copyright statements of source files shall be retained.

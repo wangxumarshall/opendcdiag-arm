@@ -2,6 +2,10 @@
 
 OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in ARM CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework.
 
+## Origin
+
+SDCShield is derived from OpenDCDiag (which contains the Intel `sandstone` framework), licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for full derivation and upstream provenance.
+
 ## 快速开始
 
 两条入口，按需选一。
