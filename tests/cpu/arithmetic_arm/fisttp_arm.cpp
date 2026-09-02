@@ -15,7 +15,7 @@
  * import_memory pointing at per-thread stack buffers, so ACL does not allocate
  * or own any memory that would need to survive sandstone's fork-per-iteration.
  *
- * Logging follows OpenDCDiag convention: pass path is silent; on mismatch the
+ * Logging follows SDCShield convention: pass path is silent; on mismatch the
  * failing inputs and actual-vs-golden outputs are dumped via log_data() before
  * the thread is marked failed via report_fail_msg().
  * @endparblock

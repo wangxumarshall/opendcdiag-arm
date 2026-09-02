@@ -1,6 +1,6 @@
-# OpenDCDiag 多 openEuler 版本构建与部署方案(方案 2:Registry 镜像)
+# SDCShield 多 openEuler 版本构建与部署方案(方案 2:Registry 镜像)
 
-> 目标:在 openEuler 20.03 / 22.03 / 24.03 三大系列、各 LTS+SP1~SP4 共 **15 个**操作系统版本上运行 OpenDCDiag,受限于各版本编译器(gcc-7/10/12)与依赖库版本差异,需为每个版本构建**原生二进制 + 随包运行时库**,打包后下载到指定环境运行。要求**开发、构建、部署**三端灵活且高效。
+> 目标:在 openEuler 20.03 / 22.03 / 24.03 三大系列、各 LTS+SP1~SP4 共 **15 个**操作系统版本上运行 SDCShield,受限于各版本编译器(gcc-7/10/12)与依赖库版本差异,需为每个版本构建**原生二进制 + 随包运行时库**,打包后下载到指定环境运行。要求**开发、构建、部署**三端灵活且高效。
 >
 > 本方案采用 **A 路线(全量逐版本)** + **方案 2(镜像入 Registry,不入 git)**:15 个原生二进制逐版本纯净验证通过才发布;部署侧精确匹配、**不跨版本回退**;容器镜像以 `Containerfile` 配方入仓、镜像本体存 Registry,可复现、可追溯、不膨胀主仓。
 
@@ -14,7 +14,7 @@
 | 单系列 5 SP RPM 树 | 0.98–1.7 GB | 同上,每系列独立 submodule |
 | 单 SP `built/` 产物(二进制+libs) | 2.8–19 MB | 各 RPM submodule 的 `built/`(已是现状) |
 | 单 SP 容器镜像(装好 deps) | 210–595 MB | **ghcr.io Registry**(本方案,不入 git) |
-| `Containerfile` + 编排脚本(文本) | < 10 KB | opendcdiag-arm 主仓 git |
+| `Containerfile` + 编排脚本(文本) | < 10 KB | sdcshield 主仓 git |
 | 现有本地 podman 镜像存储 | 39 GB(15 镜像) | 迁移至 Registry 后本地仅作缓存 |
 
 > 体积结论:RPM 树与镜像层均为**百 MB 级**,绝不进 git pack(2GB 上限 + 二进制不可压缩)。RPM 树作为**构建输入**需 git 追踪版本 → 已用 submodule 解决;镜像作为**构建产物**该进 Registry,不入 git。
@@ -27,7 +27,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 源码层   opendcdiag-arm 主仓 (git, <100MB)                       │
+│ 源码层   sdcshield 主仓 (git, <100MB)                       │
 │   framework/ tests/ meson.build + scripts/offline-build/ +       │
 │   framework/compat/  +  Containerfile.template + 编排脚本       │
 └──────────────────────────┬──────────────────────────────────────┘
@@ -40,14 +40,14 @@
                            │ Containerfile COPY (构建时)
 ┌──────────────────────────▼──────────────────────────────────────┐
 │ 环境层   ghcr.io Registry (镜像, 15 个 × ~250MB, 不入 git)       │
-│   ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3 ...   │
+│   ghcr.io/wangxumarshall/sdcshield-offline:24.03-LTS-SP3 ...   │
 │   由 Containerfile.template + RPM pin 可复现构建;digest 入 manifest│
 └──────────────────────────┬──────────────────────────────────────┘
                            │ podman run (构建/验证时)
 ┌──────────────────────────▼──────────────────────────────────────┐
 │ 产物层   各 submodule/built/ + 发布 tarball                     │
-│   built/: opendcdiag + libs/ + run-opendcdiag.sh + BUILD-HASH   │
-│   dist/opendcdiag-<tag>.tar.gz (~20MB, 现场用)                  │
+│   built/: sdcshield + libs/ + run-sdcshield.sh + BUILD-HASH   │
+│   dist/sdcshield-<tag>.tar.gz (~20MB, 现场用)                  │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ 下载
 ┌──────────────────────────▼──────────────────────────────────────┐
@@ -63,7 +63,7 @@
 [build-images.sh]           ──▶ ghcr.io 镜像 (15, 环境, 本方案新增)
         ↑ Containerfile.template      │
                                     │
-[container-build.sh]         ──▶ build-out/<tag>/opendcdiag (二进制, 已有/改)
+[container-build.sh]         ──▶ build-out/<tag>/sdcshield (二进制, 已有/改)
                                     │
 [package-built-artifacts.sh]──▶ submodule/built/ + BUILD-HASH + MANIFEST (已有/增强)
                                     │
@@ -90,7 +90,7 @@ SP4   ...SP4                     ...SP4                     ...SP4
 **A 路线边界(不可逾越)**:
 - 一个 SP 一个二进制,取该 SP 原生 toolchain codegen。
 - 部署侧无匹配 SP → **硬停并指路重构建**,绝不静默用相邻 SP 顶替(placeholder-honesty)。
-- 每个二进制自带运行时 `.so` bundle,`run-opendcdiag.sh` 设 `LD_LIBRARY_PATH`,纯净容器即跑。
+- 每个二进制自带运行时 `.so` bundle,`run-sdcshield.sh` 设 `LD_LIBRARY_PATH`,纯净容器即跑。
 - `verify-built-pristine.sh`(只挂 `built/`,无 host lib64)是唯一发布闸门。
 
 ---
@@ -161,7 +161,7 @@ RUN gcc --version | head -1
 ```
 
 逻辑:
-1. 算镜像 tag:`ghcr.io/wangxumarshall/opendcdiag-offline:${series}-LTS-${sp}`(LTS 无后缀)
+1. 算镜像 tag:`ghcr.io/wangxumarshall/sdcshield-offline:${series}-LTS-${sp}`(LTS 无后缀)
 2. 算 Containerfile 输入哈希:`sha256(Containerfile.template + 该 SP RPM 树的 file list + 版本宏配置)`
 3. 查 `image-manifest.tsv`:输入哈希已存在且 `skopeo inspect` 确认 digest 在 Registry → **skip**(幂等,改 RPM 才重建)
 4. `podman build -f Containerfile.template -t <tag> --build-arg SERIES=.. --build-arg SP=.. <rpmdir>`
@@ -188,7 +188,7 @@ sp-tag            containerfile-sha  rpm-pin-sha    image-digest                
 
 ### 2.4 Registry 与气隙导入
 
-- **主路径(有网开发机)**:`build-images.sh <series> <sp> --push` → `podman push ghcr.io/wangxumarshall/opendcdiag-offline:<tag>`。ghcr.io 私有仓免费,15 × 250MB ≈ 3.7GB,额度内。
+- **主路径(有网开发机)**:`build-images.sh <series> <sp> --push` → `podman push ghcr.io/wangxumarshall/sdcshield-offline:<tag>`。ghcr.io 私有仓免费,15 × 250MB ≈ 3.7GB,额度内。
 
   **ghcr.io 授权(首次 push 前,一次性)**:
   1. GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → 生成 token,勾选 `write:packages`(写 package)权限。
@@ -304,27 +304,27 @@ printf '%s\n' "${TARGETS[@]}" | xargs -P "$JOBS" -I{} bash -c '...build_one {}'
 
 ### 4.1 package-built-artifacts.sh 增强(写元数据)
 
-现状已产 `built/`(二进制+libs+run-opendcdiag.sh)。增加三份元数据:
+现状已产 `built/`(二进制+libs+run-sdcshield.sh)。增加三份元数据:
 
 **`built/BUILD-HASH`**(单行):构建输入哈希(杠杆 2 用)。skip 判定依据。
 
 **`built/MANIFEST.tsv`**:产物文件清单 + 校验和
 ```
 file              sha256                                                       size     source
-opendcdiag        9f8a...                                                     5242880  built
+sdcshield        9f8a...                                                     5242880  built
 libs/libstdc++.so.6.0.28  e7c1...                                1800000  gcc-toolset-10
 libs/libatomic.so.1.2.0   3b9f...                                  50000  libatomic RPM
 libs/libgcc_s.so.1        ...                                        ...
-run-opendcdiag.sh  ...                                        1200  generator
+run-sdcshield.sh  ...                                        1200  generator
 ```
 
 **`built/VERSION`**:人读元数据
 ```
-opendcdiag openEuler-24.03LTS_SP3
+sdcshield openEuler-24.03LTS_SP3
 git: 028e9c9 (main, 2026-08-24)
 built: 2026-08-24T10:00Z
 gcc: 12.3.1   glibc: 2.38   cpp_std: gnu++23
-image: ghcr.io/.../opendcdiag-offline:24.03-LTS-SP3@sha256:9f8a7b...
+image: ghcr.io/.../sdcshield-offline:24.03-LTS-SP3@sha256:9f8a7b...
 binary-sha256: 9f8a...
 build-hash: a1b2c3d...
 ```
@@ -337,11 +337,11 @@ build-hash: a1b2c3d...
 
 ```
 用法: package-release.sh <series> <sp>
-产物: dist/opendcdiag-openEuler-24.03LTS_SP3-<sha8>.tar.gz (~20MB)
+产物: dist/sdcshield-openEuler-24.03LTS_SP3-<sha8>.tar.gz (~20MB)
   含:
-    opendcdiag          (stripped 二进制)
+    sdcshield          (stripped 二进制)
     libs/               (运行时 .so)
-    run-opendcdiag.sh
+    run-sdcshield.sh
     MANIFEST.tsv
     VERSION
     built-index.tsv     (全 15 SP 总表,供 run.sh 匹配)
@@ -376,7 +376,7 @@ sp-tag              git-sha     built-date          gcc       glibc    binary-sh
 1. source _common.sh → detect_os_version_full → "openEuler-24.03LTS_SP3"
 2. 读 built-index.tsv,查该精确 sp-tag 条目
 3. 查本地部署目录有无对应 tarball(或已解压 built/):
-   有 → 解压(若未解压)→ exec run-opendcdiag.sh "$@"
+   有 → 解压(若未解压)→ exec run-sdcshield.sh "$@"
    无 + 有网 → 从 GitHub Release 按版本拉对应 tarball 到本地缓存 → 解压 → exec
    无 + 气隙 → 硬停:
      "错误: 本机 openEuler-24.03LTS_SP3 无匹配二进制。
@@ -391,7 +391,7 @@ sp-tag              git-sha     built-date          gcc       glibc    binary-sh
 
 两种,各司其职:
 - **现场预置目录**:运维把需要的几个 SP 的 tarball + 一份 `built-index.tsv` 放同一目录,`run.sh` 从该目录匹配。气隙场景。
-- **按需拉取(有网)**:`run.sh` 从 GitHub Release `/releases` 按检测到的版本下载对应 tarball 到 `~/.cache/opendcdiag/`,缓存复用。
+- **按需拉取(有网)**:`run.sh` 从 GitHub Release `/releases` 按检测到的版本下载对应 tarball 到 `~/.cache/sdcshield/`,缓存复用。
 
 ### 5.3 run.sh 骨架
 
@@ -403,7 +403,7 @@ source "$HERE/_common.sh"   # detect_os_version_full
 
 OS_TAG=$(detect_os_version_full)   # openEuler-24.03LTS_SP3
 INDEX="$HERE/built-index.tsv"
-CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/opendcdiag"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/sdcshield"
 
 # 精确匹配
 match=$(grep -m1 "^${OS_TAG}\b" "$INDEX" || true)
@@ -415,13 +415,13 @@ tarball=$(find_tarball "$OS_TAG" "$HERE" "$CACHE")
 
 # 解压到缓存目录
 bindir="$CACHE/${OS_TAG}"
-[ -x "$bindir/opendcdiag" ] || { mkdir -p "$bindir"; tar xzf "$tarball" -C "$bindir"; }
+[ -x "$bindir/sdcshield" ] || { mkdir -p "$bindir"; tar xzf "$tarball" -C "$bindir"; }
 
 # 校验 binary-sha256(防下载损坏/篡改)
 expected_sha=$(echo "$match" | awk '{print $7}')
-verify_sha256 "$bindir/opendcdiag" "$expected_sha" || { echo "校验失败"; exit 1; }
+verify_sha256 "$bindir/sdcshield" "$expected_sha" || { echo "校验失败"; exit 1; }
 
-exec "$bindir/run-opendcdiag.sh" "$@"
+exec "$bindir/run-sdcshield.sh" "$@"
 ```
 
 ---
@@ -465,7 +465,7 @@ exec "$bindir/run-opendcdiag.sh" "$@"
 ## 8. 目标目录与文件总图
 
 ```
-opendcdiag-arm/
+sdcshield/
 ├── scripts/offline-build/
 │   ├── _common.sh                    (已有: 版本检测)
 │   ├── download-all-versions.sh      (已有: 15 SP RPM 下载)

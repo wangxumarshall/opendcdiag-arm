@@ -21,7 +21,7 @@
 #
 # 镜像 tag 命名(与 container-build.sh 的 IMG 变量对齐,确保下游无缝):
 #   本地:  localhost/openeuler-offline:24.03-LTS-SP3   ← container-build.sh 用这个
-#   远端:  ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3   ← --push 时推
+#   远端:  ghcr.io/wangxumarshall/sdcshield-offline:24.03-LTS-SP3   ← --push 时推
 #
 # 幂等:Containerfile.template + RPM submodule pin + 版本宏 都不变 → 输入哈希不变 →
 #   manifest 已有 + 镜像在(本地或 Registry)→ skip。改 RPM 或 Containerfile 才重建。
@@ -35,7 +35,7 @@ IMG_DIR="$SCRIPT_DIR"                          # Containerfile.template / manife
 CONTAINERFILE="$IMG_DIR/Containerfile.template"
 MANIFEST="$IMG_DIR/image-manifest.tsv"
 GHCR_USER="${GHCR_USER:-wangxumarshall}"       # ghcr.io 命名空间(可用 env 覆盖)
-GHCR="ghcr.io/${GHCR_USER}/opendcdiag-offline"
+GHCR="ghcr.io/${GHCR_USER}/sdcshield-offline"
 LOCAL_PREFIX="localhost/openeuler-offline"
 
 # ── series/sp → 各标识 ──────────────────────────────────────────────
@@ -161,7 +161,7 @@ build_one() {
                 # 即便 skip,--tar 仍导出(用户要的是 tar 包,不是重建)
                 if [ "$TAR" = 1 ]; then
                     mkdir -p "$SRC_ROOT/dist/images"
-                    local tarpath="$SRC_ROOT/dist/images/opendcdiag-offline-${series}-${SP_LABEL}.oci.tar"
+                    local tarpath="$SRC_ROOT/dist/images/sdcshield-offline-${series}-${SP_LABEL}.oci.tar"
                     [ -f "$tarpath" ] || { echo "  导出 tar(skip): $tarpath"; podman save -o "$tarpath" "$LOCAL_TAG" 2>/dev/null || echo "  ⚠ save 失败" >&2; }
                 fi
                 return 0
@@ -222,7 +222,7 @@ build_one() {
     # tar
     if [ "$TAR" = 1 ]; then
         mkdir -p "$SRC_ROOT/dist/images"
-        local tarpath="$SRC_ROOT/dist/images/opendcdiag-offline-${series}-${SP_LABEL}.oci.tar"
+        local tarpath="$SRC_ROOT/dist/images/sdcshield-offline-${series}-${SP_LABEL}.oci.tar"
         echo "  导出 tar: $tarpath"
         podman save -o "$tarpath" "$LOCAL_TAG" 2>/dev/null || echo "  ⚠ save 失败" >&2
     fi

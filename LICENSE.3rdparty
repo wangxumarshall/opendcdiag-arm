@@ -1,4 +1,4 @@
-The OpenDCDiag framework includes source code from the following projects.
+The SDCShield framework (derived from OpenDCDiag) includes source code from the following projects.
 
 Name: forkfd
 URL: https://github.com/qt/qtbase/tree/dev/src/3rdparty/forkfd

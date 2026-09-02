@@ -1,6 +1,10 @@
-# OpenDCDiag-ARM
+# SDCShield
 
-OpenDCDiag-ARM is an open-source project designed to identify defects and bugs in ARM CPUs ported from Intel's OpenDCDiag. It consists of a set of tests built around a sophisticated CPU testing framework.
+SDCShield is an open-source project designed to identify defects and bugs in ARM CPUs derived from Intel's OpenDCDiag (ARM64 port). It consists of a set of tests built around a sophisticated CPU testing framework.
+
+## Origin
+
+SDCShield is derived from OpenDCDiag (which contains the Intel `sandstone` framework), licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for full derivation and upstream provenance.
 
 ## 快速开始
 
@@ -12,18 +16,18 @@ OpenDCDiag-ARM is an open-source project designed to identify defects and bugs i
 
 | 子模块目录 | 覆盖版本 |
 |---|---|
-| [`third-party/rpms/openEuler-20.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-20.03.git) | 20.03 LTS / SP1–SP4 |
-| [`third-party/rpms/openEuler-22.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-22.03.git) | 22.03 LTS / SP1–SP4 |
-| [`third-party/rpms/openEuler-24.03/`](https://github.com/wangxumarshall/opendcdiag-arm-rpm-24.03.git) | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
+| [`third-party/rpms/openEuler-20.03/`](https://github.com/wangxumarshall/sdcshield-rpm-20.03.git) | 20.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-22.03/`](https://github.com/wangxumarshall/sdcshield-rpm-22.03.git) | 22.03 LTS / SP1–SP4 |
+| [`third-party/rpms/openEuler-24.03/`](https://github.com/wangxumarshall/sdcshield-rpm-24.03.git) | 24.03 LTS / SP1–SP4（SP3 = 基准版本） |
 
 ```bash
 git clone --recurse-submodules <repo-url>   # 含子模块
 cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built
-./run-opendcdiag.sh --list-tests            # 自动设 LD_LIBRARY_PATH=./libs
-./run-opendcdiag.sh -T forever -t 60s -Y -F                # 首次检测到SDC后，停止 
-./run-opendcdiag.sh -T forever -t 60s -Y -ignore-timeout   # 一起跑，就算检测到SDC后，也一直往后跑
-./run-opendcdiag.sh -T forever -t 600s -Y -e "fma*" -e "eigen_svd*" -e "eigen_gemm*" -e "zstd*" -e "zlib*" 
-./run-opendcdiag.sh -t 60s -n 1 -e zstd19 # 单线程，规避大核数 ULP 数值 flakiness
+./run-sdcshield.sh --list-tests            # 自动设 LD_LIBRARY_PATH=./libs
+./run-sdcshield.sh -T forever -t 60s -Y -F                # 首次检测到SDC后，停止 
+./run-sdcshield.sh -T forever -t 60s -Y -ignore-timeout   # 一起跑，就算检测到SDC后，也一直往后跑
+./run-sdcshield.sh -T forever -t 600s -Y -e "fma*" -e "eigen_svd*" -e "eigen_gemm*" -e "zstd*" -e "zlib*" 
+./run-sdcshield.sh -t 60s -n 1 -e zstd19 # 单线程，规避大核数 ULP 数值 flakiness
 ```
 
 > **SP 必须与目标机一致**：SP3 的 `glibc-devel` 携带 `Requires: glibc = <sp3-N>`，装到 SP4 会触发受保护 `glibc` 降级死结。`install-deps.sh` 通过 `.os-version` 标记在安装前拦截错配。
@@ -35,7 +39,7 @@ cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built
 sudo dnf install -y meson ninja-build gcc g++ cmake boost-devel zlib-devel libzstd-devel gtest-devel
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup builddir --buildtype=release
 ninja -C builddir
-./builddir/opendcdiag --list-tests        # 应列出 264 个 PROD 用例
+./builddir/sdcshield --list-tests        # 应列出 264 个 PROD 用例
 ```
 
 > ARM64 要求 Eigen 5.0.0+（系统 Eigen 3.3.x 在 GCC 12+ 下编译失败）。仓库自带 `third-party/eigen5/`，aarch64 构建路径在 `tests/cpu/meson.build` 中直接 `include_directories` 指向它，**无需系统安装 eigen3**；`PKG_CONFIG_PATH` 仅为兼容 x86 路径而保留，带上无害。
@@ -49,7 +53,7 @@ ninja -C builddir
 ```bash
 cd scripts/offline-build/
 # A. 下载 RPM 树（有网机，与目标机同 SP）
-./download-deps.sh                     # 当前 SP 一版 → ./opendcdiag-rpms/
+./download-deps.sh                     # 当前 SP 一版 → ./sdcshield-rpms/
 ./download-all-versions.sh             # 全 LTS/SP，对 24.03 SP3 基准取同名包集交集
 ./supplement-20.03-gcc10.sh all         # 20.03 专用：补 gcc-10 工具集 + meson 0.59（20.03 自带 gcc-7）
 # B. 离线装依赖（目标机，无网）→ 传对应 SP 的 RPM 目录，版本会被核对
@@ -57,7 +61,7 @@ cd scripts/offline-build/
 # C. 目标机原生构建（依赖已装，仅 24.03）
 ./build.sh                              # meson + ninja + 冒烟（zstd19 -n 1）
 # D. 按版本容器构建（免主机安装；源码只读挂载）—— 22.03/20.03 必走此路
-./container-build.sh 24.03 SP3          # → build-out/openEuler-24.03LTS_SP3/opendcdiag
+./container-build.sh 24.03 SP3          # → build-out/openEuler-24.03LTS_SP3/sdcshield
 ./container-build.sh 22.03 SP3          # 注入 -DOPENEULER_22_03 + C++23 polyfill
 ./container-build.sh 20.03 SP4          # gcc-toolset-10 + 仓内 vendored meson 0.59.4
 # E. 打包到对应版本 built/ 目录
@@ -79,8 +83,8 @@ cd scripts/offline-build/
 
 ```console
 # 克隆（含 RPM 依赖子模块）→ 切到方案分支
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield && git checkout feat/multi-version-build-deploy
 # 全 15 版本构建 + 纯净验证（发布闸门）→ 各 SP 产物进 built/
 ./scripts/offline-build/build-all.sh --all --full --jobs 3   # 期望 PASS: 15
 # 产出现场 tarball（~6MB，含自动检测 OS 的 run.sh）
@@ -88,7 +92,7 @@ cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
 # 目标机：解压后 ./run.sh -e zstd19 -t 2000 -n 1   # run.sh 自动精确匹配 OS 版本，不匹配则硬停指路
 ```
 
-> `run.sh` 部署逻辑：检测本机 OS → 精确匹配 `built-index.tsv`（不跨版本回退）→ 校验 `binary-sha256` → `exec run-opendcdiag.sh`（设 `LD_LIBRARY_PATH` 指向随包 `libs/`）。
+> `run.sh` 部署逻辑：检测本机 OS → 精确匹配 `built-index.tsv`（不跨版本回退）→ 校验 `binary-sha256` → `exec run-sdcshield.sh`（设 `LD_LIBRARY_PATH` 指向随包 `libs/`）。
 
 完整设计与操作指南见 [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md)（设计方案）与 [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md)（一键复现指南 + 15 SP 全 full 验证基线 + 复现 gotcha）。快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
 
@@ -109,7 +113,7 @@ cd opendcdiag-arm && git checkout feat/multi-version-build-deploy
 ```bash
 sudo dnf install -y openssl-devel
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup --reconfigure builddir --buildtype=release -Dssl_link_type=dynamic
-ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
+ninja -C builddir && ./builddir/sdcshield --list-tests | grep openssl_sha
 ```
 
 
@@ -162,15 +166,15 @@ ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
 
 >>>>>>> main
 ```console
-./builddir/opendcdiag --list-tests                        # 列 PROD 用例（默认）
-./builddir/opendcdiag -e zstd19 -t 5000                   # 单测试，5 秒，全核
-./builddir/opendcdiag -e zstd19 -t 5000 -n 1             # 单线程，规避 192 核 ULP flakiness
-./builddir/opendcdiag --quality=0 -e arm64_sdc -t 5000   # 跑 BETA 用例
-./builddir/opendcdiag --quality=-1 -e eigen_svd_jacobi   # 跑 SKIP 用例
-./builddir/opendcdiag -l                                  # 用例 + 描述 + 分组
-./builddir/opendcdiag --list-groups                       # @compression / @ipsec / @math
-./builddir/opendcdiag --dump-cpu-info                     # CPU + 特性 + 拓扑
-./builddir/opendcdiag --on-crash=context -e selftest_sigsegv -vv   # 崩溃回溯
+./builddir/sdcshield --list-tests                        # 列 PROD 用例（默认）
+./builddir/sdcshield -e zstd19 -t 5000                   # 单测试，5 秒，全核
+./builddir/sdcshield -e zstd19 -t 5000 -n 1             # 单线程，规避 192 核 ULP flakiness
+./builddir/sdcshield --quality=0 -e arm64_sdc -t 5000   # 跑 BETA 用例
+./builddir/sdcshield --quality=-1 -e eigen_svd_jacobi   # 跑 SKIP 用例
+./builddir/sdcshield -l                                  # 用例 + 描述 + 分组
+./builddir/sdcshield --list-groups                       # @compression / @ipsec / @math
+./builddir/sdcshield --dump-cpu-info                     # CPU + 特性 + 拓扑
+./builddir/sdcshield --on-crash=context -e selftest_sigsegv -vv   # 崩溃回溯
 ```
 
 Eigen SVD：`eigen_svd_cdouble` 跑在 NEON 后端；`eigen_svd_cdouble_sve` 仅 SVE 硬件运行，Kunpeng 920 在 init 阶段干净跳过。

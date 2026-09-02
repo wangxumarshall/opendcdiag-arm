@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/schema#",
-  "description": "OpenDCDiag's output schema for CPUs",
+  "description": "SDCShield's output schema for CPUs",
   "type": "object",
   "properties": {
     "command-line": {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# container-build.sh — 在 podman openEuler 容器内离线构建 OpenDCDiag-arm 并验证。
+# container-build.sh — 在 podman openEuler 容器内离线构建 SDCShield-arm 并验证。
 #
 # 用法:
 #   ./container-build.sh <series> <sp> [extra-meson-args...]
@@ -195,7 +195,7 @@ meson_setup setup "$BUILD/builddir" "$SRCW" --buildtype=release -Dcpp_std="$CPPS
 echo "===== [4/5] ninja ====="
 ninja -C "$BUILD/builddir"
 
-BIN="$BUILD/builddir/opendcdiag"
+BIN="$BUILD/builddir/sdcshield"
 echo "===== [5/5] 功能验证 ====="
 ls -la "$BIN"
 N=$("$BIN" --list-tests 2>/dev/null | wc -l)
@@ -206,7 +206,7 @@ echo "--- zstd19 -n 1 ---"
 "$BIN" -e zstd19 -t 2000 -n 1 2>&1 | grep -iE "exit|result" | head -3 || true
 
 # 拷产物到 /out
-cp "$BIN" "$OUT/opendcdiag"
+cp "$BIN" "$OUT/sdcshield"
 ldd "$BIN" 2>/dev/null | awk '{print $1}' | sort -u > "$OUT/ldd-libs.txt" || true
 echo "===== 容器内构建完成 ====="
 INNER_EOF

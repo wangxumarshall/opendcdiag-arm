@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-full-tests.sh — 在 podman openEuler 容器内运行 OpenDCDiag 的全量检测用例。
+# run-full-tests.sh — 在 podman openEuler 容器内运行 SDCShield 的全量检测用例。
 #
 # 用法:
 #   ./run-full-tests.sh <series> <sp> [build]
@@ -36,7 +36,7 @@ esac
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
 IMG="localhost/openeuler-offline:${SERIES}-${SP_LABEL}"
 OUTDIR_HOST="$SRC_ROOT/build-out/${OS_TAG}"
-BIN_HOST="$OUTDIR_HOST/opendcdiag"
+BIN_HOST="$OUTDIR_HOST/sdcshield"
 TEST_OUT_HOST="$OUTDIR_HOST/test-results"
 mkdir -p "$TEST_OUT_HOST"
 
@@ -49,7 +49,7 @@ fi
 
 # 挂载: 二进制只读 + 结果目录可写 + 运行时库。
 # :Z 打 SELinux 私有标签,否则 enforcing 系统拒绝 exec host 挂载的二进制。
-MOUNTS=(-v "$BIN_HOST:/bin/opendcdiag:ro,Z" -v "$TEST_OUT_HOST:/out:Z")
+MOUNTS=(-v "$BIN_HOST:/bin/sdcshield:ro,Z" -v "$TEST_OUT_HOST:/out:Z")
 LD_PATH=""
 if [ "$SERIES" = "24.03" ]; then
     MOUNTS+=(-v /usr/lib64:/usr/lib64:ro)
@@ -75,10 +75,10 @@ fi
 run_in_container() {
     if [ -n "$LD_PATH" ]; then
         timeout 360 podman run --rm --user=0 "${MOUNTS[@]}" \
-            -e LD_LIBRARY_PATH="$LD_PATH" "$IMG" /bin/opendcdiag "$@" 2>&1
+            -e LD_LIBRARY_PATH="$LD_PATH" "$IMG" /bin/sdcshield "$@" 2>&1
     else
         timeout 360 podman run --rm --user=0 "${MOUNTS[@]}" \
-            "$IMG" /bin/opendcdiag "$@" 2>&1
+            "$IMG" /bin/sdcshield "$@" 2>&1
     fi
 }
 

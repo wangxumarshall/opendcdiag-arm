@@ -1,4 +1,4 @@
-This is the OpenDCDiag project. OpenDCDiag is a tool to test CPUs and other
+This is the SDCShield project. SDCShield is a tool to test CPUs and other
 parts of the system on a live running system for manufacturing and other
 defects.
 

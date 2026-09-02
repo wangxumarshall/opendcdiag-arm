@@ -1,5 +1,5 @@
 /*
- *  list.h - minimal Linux-kernel-style doubly-linked list, for OpenDCDiag
+ *  list.h - minimal Linux-kernel-style doubly-linked list, for SDCShield
  *  memory tests that need an intrusive MPSC priority queue (e.g. the
  *  GlusterFS IOT scheduler exercised by memcpy_rewr).
  *

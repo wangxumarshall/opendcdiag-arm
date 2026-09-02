@@ -2,7 +2,7 @@
 # verify-built-pristine.sh — 在纯净匹配容器里验证 RPM 仓 built/ 目录的二进制能独立运行。
 #
 # 这是"直接下载后能运行"的决定性验证: 只挂载 built/ 目录(模拟用户下载了该目录),
-# 不挂载 host /usr/lib64, 不挂载 build-out/。用随包的 run-opendcdiag.sh 跑全量用例。
+# 不挂载 host /usr/lib64, 不挂载 build-out/。用随包的 run-sdcshield.sh 跑全量用例。
 #
 # 用法: ./verify-built-pristine.sh <series> <sp> [smoke]
 #   series: 24.03 | 22.03 | 20.03
@@ -49,7 +49,7 @@ run_in_pristine() {
         "$IMG" bash -c "
             mkdir -p /var/tmp /tmp 2>/dev/null
             export LD_LIBRARY_PATH=$BUILT/libs\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}
-            $BUILT/opendcdiag \"\$@\"
+            $BUILT/sdcshield \"\$@\"
         " _ "$@" 2>&1
 }
 

@@ -305,8 +305,8 @@ Per CLAUDE.md, OpenSSL is opt-in (`ssl_link_type=none` default). To build the po
 PKG_CONFIG_PATH=./third-part/eigen5 meson setup --reconfigure builddir \
     --buildtype=release -Dssl_link_type=dynamic
 ninja -C builddir
-./builddir/opendcdiag --list-tests | grep ipsec          # expect 46 entries
-./builddir/opendcdiag -e ipsec_aes192_gcm_sse -t 5000 -n 1   # single-thread, deterministic
+./builddir/sdcshield --list-tests | grep ipsec          # expect 46 entries
+./builddir/sdcshield -e ipsec_aes192_gcm_sse -t 5000 -n 1   # single-thread, deterministic
 ```
 
 ---

@@ -1,5 +1,5 @@
 #!/bin/bash
-# package-built-artifacts.sh — 把容器构建产物(opendcdiag + 运行时依赖库 + 运行脚本)
+# package-built-artifacts.sh — 把容器构建产物(sdcshield + 运行时依赖库 + 运行脚本)
 # 打包到对应 RPM submodule 的 built/ 目录,供目标机离线运行。
 #
 # 用法: ./package-built-artifacts.sh <series> <sp>
@@ -8,10 +8,10 @@
 #
 # 产物结构 (每个 SP):
 #   third-party/rpms/openEuler-XX.03/openEuler-XX.03LTS_SPx/built/
-#   ├── opendcdiag              (stripped 二进制)
+#   ├── sdcshield              (stripped 二进制)
 #   ├── libs/                   (非系统自带、需随包提供的 .so)
 #   │   └── ...
-#   └── run-opendcdiag.sh       (设 LD_LIBRARY_PATH 后跑二进制)
+#   └── run-sdcshield.sh       (设 LD_LIBRARY_PATH 后跑二进制)
 #
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
@@ -29,7 +29,7 @@ case "$SP" in
 esac
 
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
-BIN="$SRC_ROOT/build-out/${OS_TAG}/opendcdiag"
+BIN="$SRC_ROOT/build-out/${OS_TAG}/sdcshield"
 RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}"
 OUTDIR="$RPMDIR/built"
 
@@ -40,9 +40,9 @@ mkdir -p "$OUTDIR/libs"
 
 # 1) stripped 二进制
 echo "==> $OS_TAG: 拷贝 + strip 二进制"
-cp "$BIN" "$OUTDIR/opendcdiag"
-strip --strip-debug --strip-unneeded "$OUTDIR/opendcdiag" 2>/dev/null || true
-chmod +x "$OUTDIR/opendcdiag"
+cp "$BIN" "$OUTDIR/sdcshield"
+strip --strip-debug --strip-unneeded "$OUTDIR/sdcshield" 2>/dev/null || true
+chmod +x "$OUTDIR/sdcshield"
 
 # 2) 运行时依赖库(非系统自带的)。用容器内 ldd 取真实路径。
 #    方案: 在对应容器里跑 ldd, 提取 .so 路径, 只拷非 /lib64 /usr/lib64 系统路径
@@ -60,7 +60,7 @@ timeout 120 podman run --rm --user=0 \
 mkdir -p /var/tmp /tmp
 rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true
 # 装最小运行时库(让 ldd 能解析 toolset 路径) — 仅 ldd 探测, 不跑二进制
-ldd /b/opendcdiag 2>/dev/null | awk "/=>/ {print \$3} /^[[:space:]]/ {print \$1}" | sort -u
+ldd /b/sdcshield 2>/dev/null | awk "/=>/ {print \$3} /^[[:space:]]/ {print \$1}" | sort -u
 ' > "$LIBS_FILE" 2>/dev/null || true
 
 # 判定哪些库需随包(非标准系统路径): toolset 的 /opt/openEuler/..., 24.03 的 ACL
@@ -156,17 +156,17 @@ if [ "$SERIES" = "22.03" ] || [ "$SERIES" = "24.03" ]; then
 fi
 
 # 3) 运行脚本
-cat > "$OUTDIR/run-opendcdiag.sh" <<'RUN_EOF'
+cat > "$OUTDIR/run-sdcshield.sh" <<'RUN_EOF'
 #!/bin/bash
-# run-opendcdiag.sh — 在目标机上运行随包的 opendcdiag 二进制。
+# run-sdcshield.sh — 在目标机上运行随包的 sdcshield 二进制。
 # 自动设置 LD_LIBRARY_PATH 指向随包 libs/ 目录。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export LD_LIBRARY_PATH="$SCRIPT_DIR/libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # 20.03 的二进制 RPATH 指向 /opt/openEuler/gcc-toolset-10/root/usr/lib64;
 # 若目标机没装 toolset, 上面的 libs/ 提供了同名库, LD_LIBRARY_PATH 优先于 RPATH。
-exec "$SCRIPT_DIR/opendcdiag" "$@"
+exec "$SCRIPT_DIR/sdcshield" "$@"
 RUN_EOF
-chmod +x "$OUTDIR/run-opendcdiag.sh"
+chmod +x "$OUTDIR/run-sdcshield.sh"
 
 echo "==> $OS_TAG 打包完成:"
 ls -la "$OUTDIR"
@@ -198,7 +198,7 @@ write_metadata() {
     {
         echo "# MANIFEST.tsv — $OS_TAG 产物校验清单"
         echo -e "file\tsha256\tsize\tsource"
-        for f in opendcdiag run-opendcdiag.sh; do
+        for f in sdcshield run-sdcshield.sh; do
             [ -f "$OUTDIR/$f" ] && printf '%s\t%s\t%s\t%s\n' "$f" "$(sha256sum "$OUTDIR/$f" | awk '{print $1}')" "$(stat -c%s "$OUTDIR/$f")" "built"
         done
         for f in "$OUTDIR"/libs/*; do
@@ -210,14 +210,14 @@ write_metadata() {
     # VERSION:人读元数据
     local git_sha bin_sha
     git_sha=$(git -C "$SRC_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    bin_sha=$(sha256sum "$OUTDIR/opendcdiag" 2>/dev/null | awk '{print $1}' || echo "?")
+    bin_sha=$(sha256sum "$OUTDIR/sdcshield" 2>/dev/null | awk '{print $1}' || echo "?")
     cat > "$OUTDIR/VERSION" <<VERSION_EOF
-opendcdiag $OS_TAG
+sdcshield $OS_TAG
 git: $git_sha
 built: $(git -C "$SRC_ROOT" log -1 --format=%ci HEAD 2>/dev/null | cut -d' ' -f1 || echo unknown)
 series: $SERIES  sp: $SP
 cpp_std: $cpp_std  macro: ${macro:-none}
-image: ghcr.io/wangxumarshall/opendcdiag-offline:${SERIES}-${sp_label}
+image: ghcr.io/wangxumarshall/sdcshield-offline:${SERIES}-${sp_label}
 binary-sha256: ${bin_sha:0:64}
 build-hash: ${build_hash:0:64}
 VERSION_EOF

@@ -21,7 +21,7 @@ OFHC（Open Field Health Check）是 AMD 开源的**测试编排框架（test or
 - OFHC = 考场（排座位、发卷、计时、收卷、登记成绩）
 - 测试二进制（如 opendcdiag）= 考生做的题（实际运算、发现算错）
 
-OFHC 单独运行不产生任何负载、不做运算、不判对错。必须由配置文件喂一个"测试二进制"给它。官方示例是 systester（圆周率计算器），本机无 systester，改用 opendcdiag。
+OFHC 单独运行不产生任何负载、不做运算、不判对错。必须由配置文件喂一个"测试二进制"给它。官方示例是 systester（圆周率计算器），本机无 systester，改用 opendcdiag(现名 sdcshield)。
 
 ---
 
@@ -52,7 +52,7 @@ OFHC 把"检测"分成两类（README "Checking for MCE & Fails" 节）：
 
 | 通道 | 谁负责 | 本机 ARM64 可用性 |
 |------|--------|-------------------|
-| **Fails**（测试失败/miscompare） | "User defined test is responsible for this" —— 测试二进制负责 | ✅ 可用（opendcdiag 判 miscompare → 非零退出码） |
+| **Fails**（测试失败/miscompare） | "User defined test is responsible for this" —— 测试二进制负责 | ✅ 可用（opendcdiag(现名 sdcshield) 判 miscompare → 非零退出码） |
 | **MCE**（硬件机器检查异常） | OFHC 自己读 MSR 查 | ❌ 不可用（无 MSR，见下） |
 
 ### 3.1 通道 A：Fails（测试退出码）—— 本机可用
@@ -65,7 +65,7 @@ OFHC 把"检测"分成两类（README "Checking for MCE & Fails" 节）：
 四步原理：
 1. **生成核列表**：`CoreConfig` 调 `list_cores.sh`，列出要在哪些核上跑。
 2. **逐核起进程**：`tests/Test.py` 的 `execTestOnCore` 用 `numactl --physcpubind=N <测试>`，每个核一个进程，`multiprocessing.Pool` 并行。
-3. **测试自判 SDC**：被调用测试（opendcdiag）内部比对数据，发现不一致 → 报 fail → 退出码非 0。
+3. **测试自判 SDC**：被调用测试(opendcdiag, 现名 sdcshield)内部比对数据，发现不一致 → 报 fail → 退出码非 0。
 4. **OFHC 读退出码**：`Test._posttest` 收每个核的 returncode，非 0 则记入 `failingACFCores`，写进 `cmd_results_list.log.csv`。
 
 **OFHC 在这条通道上不产生任何检测能力，只是收集记录。** 真正判错的始终是测试二进制。

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## What this is
 
-OpenDCDiag is a CPU/system defect-detection tool ("is this silicon working correctly?"). Tests stress compute units (FMA, SIMD, compression, SVD) and compare results against golden values — the whole point is catching **silent data corruption (SDC)**: computations that don't crash but produce wrong bits. Forked from Intel's OpenDCDiag and ported to ARM64 (Kunpeng 920 / generic ARMv8.1+), with x86-64 still the reference architecture.
+SDCShield is a CPU/system defect-detection tool ("is this silicon working correctly?"). Tests stress compute units (FMA, SIMD, compression, SVD) and compare results against golden values — the whole point is catching **silent data corruption (SDC)**: computations that don't crash but produce wrong bits. Forked from Intel's OpenDCDiag and ported to ARM64 (Kunpeng 920 / generic ARMv8.1+), with x86-64 still the reference architecture.
 
 ## Build & run
 
@@ -16,20 +16,20 @@ The central header is `framework/sandstone.h` — the authoritative API referenc
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup builddir --buildtype=release
 ninja -C builddir
 
-# Default binary: builddir/opendcdiag
-./builddir/opendcdiag --list-tests            # list tests at default PROD quality
-./builddir/opendcdiag -e zstd19 -t 5000       # run one test, 5s, all CPUs
-./builddir/opendcdiag -e zstd19 -t 5000 -n 1  # single-threaded (deterministic, avoids big-system eigen numeric flakiness)
-./builddir/opendcdiag --quality=-1 -e <test>  # run SKIP-level tests too
-./builddir/opendcdiag --selftests ...         # framework self-tests (cause_sigill, kvm_*, etc.)
-./builddir/opendcdiag --dump-cpu-info         # detected CPU + features + topology, then exit
-./builddir/opendcdiag -s help                 # list RNG engines (Constant/LCG/AES)
-./builddir/opendcdiag --on-crash=context -e selftest_sigsegv -vv  # crash backtrace dump
+# Default binary: builddir/sdcshield
+./builddir/sdcshield --list-tests            # list tests at default PROD quality
+./builddir/sdcshield -e zstd19 -t 5000       # run one test, 5s, all CPUs
+./builddir/sdcshield -e zstd19 -t 5000 -n 1  # single-threaded (deterministic, avoids big-system eigen numeric flakiness)
+./builddir/sdcshield --quality=-1 -e <test>  # run SKIP-level tests too
+./builddir/sdcshield --selftests ...         # framework self-tests (cause_sigill, kvm_*, etc.)
+./builddir/sdcshield --dump-cpu-info         # detected CPU + features + topology, then exit
+./builddir/sdcshield -s help                 # list RNG engines (Constant/LCG/AES)
+./builddir/sdcshield --on-crash=context -e selftest_sigsegv -vv  # crash backtrace dump
 
 # OpenSSL SHA test is opt-in (default ssl_link_type=none → not built):
 PKG_CONFIG_PATH=./third-party/eigen5 meson setup --reconfigure builddir \
     --buildtype=release -Dssl_link_type=dynamic
-ninja -C builddir && ./builddir/opendcdiag --list-tests | grep openssl_sha
+ninja -C builddir && ./builddir/sdcshield --list-tests | grep openssl_sha
 ```
 
 After changing meson sources/options: `meson setup --reconfigure builddir ...` then `ninja` (plain ninja won't pick up config changes).
@@ -86,7 +86,7 @@ END_DECLARE_TEST
 
 ## Known platform quirks (Kunpeng 920, openEuler 24.03 SP3)
 
-- `sysfs cluster_id` is monotonically increasing (138→654→1170…) and `physical_package_id` is large (36/6378/12720/19062) — a firmware/ACPI-PPTT artifact, not an OpenDCDiag bug; read as-is.
+- `sysfs cluster_id` is monotonically increasing (138→654→1170…) and `physical_package_id` is large (36/6378/12720/19062) — a firmware/ACPI-PPTT artifact, not an SDCShield bug; read as-is.
 - No `cpufreq` on this board → `--vary-frequency`/`--vary-uncore-frequency` print "skipping" and continue (frequency_manager degrades gracefully; it no longer `exit(EX_IOERR)`).
 - No `thermal_zone*` CPU zones (only `cooling_device*`) → thermal throttle is a no-op; on boards that do expose `cpu`/`soc` zones it activates.
 - Eigen numerical tests (`eigen_svd_double`, `eigen_sparse`) fail **sporadically** under full-system multi-threading (192 CPUs) due to ULP-level differences in parallel SVD/sparse-solve ordering vs strict `memcmp` golden comparison — single-threaded (`-n 1`) always passes. This is an Eigen/large-core-count limitation, not a port defect; same workload would show it on x86 at high concurrency.
@@ -108,7 +108,7 @@ Each feature, functionality point, bug, or adaptation point is its own commit. N
 After writing code and before committing, the AI **must verify itself** with real commands — no claims based on "it should work" or reading the diff. Specifically:
 
 1. **Build clean**: `ninja -C builddir` must succeed with **zero new errors**. Pre-existing benign warnings (e.g. `sysv_abi ignored`, `[[assume]] ignored`, `-Wrestrict` on libstdc++ string internals) are acceptable; any warning/error introduced by the change is a failure.
-2. **Functional verification**: run the actual affected behavior with real commands and capture real output — e.g. `./builddir/opendcdiag --dump-cpu-info`, `-e <test>`, `--on-crash=context -e selftest_sigsegv -vv`. Quote the real observed output (a frequency value, a `result: pass`, a crash backtrace) as proof, not a prediction.
+2. **Functional verification**: run the actual affected behavior with real commands and capture real output — e.g. `./builddir/sdcshield --dump-cpu-info`, `-e <test>`, `--on-crash=context -e selftest_sigsegv -vv`. Quote the real observed output (a frequency value, a `result: pass`, a crash backtrace) as proof, not a prediction.
 3. **Regression check**: run at least one unaffected test (e.g. `zstd19`) and confirm `exit: pass`, zero SIGSEGV, to prove no collateral breakage.
 4. **x86-64 non-regression**: the diff must not alter x86 behavior. Confirm by inspection that changes are under `#elif/__aarch64__` or per-arch meson guards, or widening `#ifdef __x86_64__` to `|| __aarch64__` only where genuinely shared.
 5. 大颗粒度修改，同步更新readme.md和docs目录下对应文档，确保文档100%准确
@@ -122,6 +122,18 @@ Commit message must not end with:
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
+
+### Plan-driven workflow (mandatory for every non-trivial change)
+
+All non-trivial work — feature development, porting, refactors, multi-step fixes, anything beyond a single obvious line — **must** be executed via a written plan using the `superpowers:writing-plans` skill, not ad-hoc. "Trivial" means a typo or a one-line obvious fix the change itself describes completely.
+
+1. **Plan first**: before writing any code, invoke `superpowers:writing-plans` and save the plan to `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`. The plan defines one-patch-per-unit decomposition, exact files, real test commands, and per-step checkboxes (`- [ ]`).
+2. **Plan == the work list**: each plan task maps to exactly one commit, satisfying "One patch per unit" above. Do not bundle multiple plan tasks into one commit, and do not commit work not in the plan.
+3. **Track progress visibly**: implement via `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`. Check off each `- [ ]` as it completes; the live plan file is the single source of truth for what is done vs pending. If the scope changes mid-execution, edit the plan file first, then proceed.
+4. **Verify against the plan, not the diff**: the self-verification above applies per task; a task is not "done" until its plan-specified verification command's real output is quoted and its checkbox is checked.
+5. **Provenance**: keep plan files in the repo under `docs/superpowers/plans/` (they document *why* a change was made one unit at a time, complementing git history).
+
+If a request would produce more than one commit, write the plan first. No plan, no code.
 
 ### Placeholder-test honesty
 

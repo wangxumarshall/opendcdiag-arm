@@ -1,6 +1,6 @@
 /*
  *  strategy_config.h - a tiny, reusable strategy-configuration framework
- *  for OpenDCDiag memory tests.
+ *  for SDCShield memory tests.
  *
  *  Purpose
  *  -------

@@ -1,13 +1,13 @@
 # scripts/offline-build — 多 openEuler 版本构建与部署
 
-为 openEuler 20.03 / 22.03 / 24.03 三系列 × LTS+SP1~SP4 共 **15 个**版本各构建一个原生 OpenDCDiag 二进制,打包后下载到指定环境运行。完整设计见 [`docs/multi-version-build-deploy.md`](../../docs/multi-version-build-deploy.md)。
+为 openEuler 20.03 / 22.03 / 24.03 三系列 × LTS+SP1~SP4 共 **15 个**版本各构建一个原生 SDCShield 二进制,打包后下载到指定环境运行。完整设计见 [`docs/multi-version-build-deploy.md`](../../docs/multi-version-build-deploy.md)。
 
 ## 快速开始(从零 100% 复现)
 
 ```bash
 # 1. 克隆(含 RPM 依赖树子模块,各 1~1.7GB,需磁盘 ~4GB)
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield
 
 # 2. 构建一个版本(以 24.03 SP3 基准为例)
 #    build-all.sh: 镜像就绪 → 源码构建 → 打包 → 纯净验证
@@ -15,7 +15,7 @@ cd opendcdiag-arm
 
 # 期望输出:
 #   [1/5] 依赖已就绪(镜像烘焙) — 跳过安装
-#   [273/273] Linking target opendcdiag
+#   [273/273] Linking target sdcshield
 #   list-tests: 220
 #   exit: pass
 #   RESULT: PASS openEuler-24.03LTS_SP3
@@ -38,11 +38,11 @@ cd opendcdiag-arm
 ```bash
 # 在构建机产出某版本 tarball
 ./scripts/offline-build/package-release.sh 24.03 SP3
-# → dist/opendcdiag-openEuler-24.03LTS_SP3-<sha8>.tar.gz
+# → dist/sdcshield-openEuler-24.03LTS_SP3-<sha8>.tar.gz
 
 # 拷到目标机解压后直接跑(自动检测 OS,精确匹配,不匹配则硬停指路)
-tar xzf opendcdiag-openEuler-24.03LTS_SP3-*.tar.gz
-./run.sh -e zstd19 -t 2000 -n 1      # 或任意 opendcdiag 参数
+tar xzf sdcshield-openEuler-24.03LTS_SP3-*.tar.gz
+./run.sh -e zstd19 -t 2000 -n 1      # 或任意 sdcshield 参数
 ```
 
 ## 15 个版本的构建矩阵
@@ -85,7 +85,7 @@ echo "$GHCR_TOKEN" | podman login ghcr.io -u <github-user> --password-stdin
 ./scripts/offline-build/images/build-images.sh 24.03 SP3 --tar
 ```
 
-> push 已实测(24.03-SP3 镜像):`build-images.sh 24.03 SP3 --push` → `ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3`,manifest `remote=yes` + `image-digest=sha256:...` 写入;`podman pull` 拉回镜像内 `gcc 12.3.1`/`find`/`meson` 全可用。token 用 PAT(`write:packages` 权限),实测后请 revoke/rotate 暴露过的 token。
+> push 已实测(24.03-SP3 镜像):`build-images.sh 24.03 SP3 --push` → `ghcr.io/wangxumarshall/sdcshield-offline:24.03-LTS-SP3`,manifest `remote=yes` + `image-digest=sha256:...` 写入;`podman pull` 拉回镜像内 `gcc 12.3.1`/`find`/`meson` 全可用。token 用 PAT(`write:packages` 权限),实测后请 revoke/rotate 暴露过的 token。
 
 ## 效率杠杆(为何"高效")
 

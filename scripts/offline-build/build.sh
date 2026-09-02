@@ -1,5 +1,5 @@
 #!/bin/bash
-# build.sh — 在依赖已就绪的 openEuler 24.03 SPx aarch64 上构建 OpenDCDiag
+# build.sh — 在依赖已就绪的 openEuler 24.03 SPx aarch64 上构建 SDCShield
 # 并做最小功能验证。
 #
 # 用法:
@@ -38,7 +38,7 @@ fi
 echo "==> ninja..."
 ninja -C "$BUILD"
 
-BIN="$BUILD/opendcdiag"
+BIN="$BUILD/sdcshield"
 echo "==> 产物: $(ls -la "$BIN")"
 
 echo "==> 功能验证: 列出测试数"

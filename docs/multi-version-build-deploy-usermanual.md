@@ -1,4 +1,4 @@
-# OpenDCDiag ARM64 多 openEuler 版本构建部署用户指南
+# SDCShield ARM64 多 openEuler 版本构建部署用户指南
 
 > 目的:本文回顾"多 openEuler 版本构建部署"工作的设计与实现,并给出**人/AI 可照做的一键式构建、部署、验证流程**,覆盖 openEuler 20.03 / 22.03 / 24.03 三大系列的 LTS + SP1~SP4 共 **15 个** OS 版本,aarch64 架构。
 >
@@ -15,7 +15,7 @@
 ## 1. 问题与方案选型
 
 ### 1.1 问题
-OpenDCDiag 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 20.03 / 22.03 / 24.03 三系列(各 LTS+SP1~SP4=15 版本)上运行,但各版本编译器(gcc-7/10/12)与依赖库版本差异大,不能用一个二进制通吃,需为每版本构建**原生二进制 + 随包运行时库**,打包下载到指定环境运行。要求开发、构建、部署三端灵活高效。
+SDCShield 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 20.03 / 22.03 / 24.03 三系列(各 LTS+SP1~SP4=15 版本)上运行,但各版本编译器(gcc-7/10/12)与依赖库版本差异大,不能用一个二进制通吃,需为每版本构建**原生二进制 + 随包运行时库**,打包下载到指定环境运行。要求开发、构建、部署三端灵活高效。
 
 ### 1.2 方案:A 路线 + 方案 2(Registry 镜像)
 
@@ -38,7 +38,7 @@ OpenDCDiag 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 
 ## 2. 三层存储分层(架构)
 
 ```
-源码层  opendcdiag-arm 主仓(git,<30MB 新增)
+源码层  sdcshield 主仓(git,<30MB 新增)
         framework/ tests/ meson.build + scripts/offline-build/ +
         Containerfile.template + 编排脚本 + framework/compat/ + third-party/meson/
             │ git submodule pin
@@ -46,12 +46,12 @@ OpenDCDiag 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 
         openEuler-20.03/22.03/24.03,每系列 5 个 SP 子目录(各~200-340MB RPM + built/ 产物)
             │ Containerfile COPY(构建时)
 环境层  ghcr.io Registry(镜像,15 个×~250MB,不入 git)
-        ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3 ...
+        ghcr.io/wangxumarshall/sdcshield-offline:24.03-LTS-SP3 ...
         由 Containerfile + RPM pin 可复现,digest 入 manifest
             │ podman run(构建/验证时)
 产物层  各 submodule/built/ + 发布 tarball
-        built/: opendcdiag + libs/ + run-opendcdiag.sh + BUILD-HASH + MANIFEST.tsv + VERSION
-        dist/opendcdiag-<tag>.tar.gz(~6MB,现场用)
+        built/: sdcshield + libs/ + run-sdcshield.sh + BUILD-HASH + MANIFEST.tsv + VERSION
+        dist/sdcshield-<tag>.tar.gz(~6MB,现场用)
             │ 下载
 部署层  目标机 run.sh → detect OS → 精确匹配 → exec
 ```
@@ -68,8 +68,8 @@ OpenDCDiag 是 CPU/系统静默数据损坏(SDC)检测工具。要在 openEuler 
 # 磁盘:~5GB(RPM submodule 4.7GB + 镜像缓存)
 
 # 1. 克隆主仓 + RPM submodule(3 仓,共~4.7GB,首次慢)
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield
 git checkout main   # 本方案分支
 git submodule update --init --recursive          # 确保 RPM 树就绪
 
@@ -117,16 +117,16 @@ echo "$GHCR_TOKEN" | podman login ghcr.io -u wangxumarshall --password-stdin
 ```bash
 # 构建机:产出现场 tarball(~6MB,含 run.sh 自动检测 OS + 精确匹配)
 ./scripts/offline-build/package-release.sh 24.03 SP3
-# → dist/opendcdiag-openEuler-24.03LTS_SP3-<sha8>.tar.gz
+# → dist/sdcshield-openEuler-24.03LTS_SP3-<sha8>.tar.gz
 
 # 拷到目标机解压后直接跑(自动检测 OS,精确匹配,不匹配则硬停指路)
-tar xzf opendcdiag-openEuler-24.03LTS_SP3-*.tar.gz
-./run.sh -e zstd19 -t 2000 -n 1      # 或任意 opendcdiag 参数
+tar xzf sdcshield-openEuler-24.03LTS_SP3-*.tar.gz
+./run.sh -e zstd19 -t 2000 -n 1      # 或任意 sdcshield 参数
 ./run.sh --list-tests
 ./run.sh                              # 全量 PROD 用例
 ```
 
-`run.sh` 流程:`/etc/os-release` 检测 OS → 精确匹配 `built-index.tsv`(不回退)→ 校验 `binary-sha256`(防损坏)→ `exec run-opendcdiag.sh`(设 `LD_LIBRARY_PATH`)。不匹配→硬停并指路 `build-all.sh <tag> --full` 重构建。
+`run.sh` 流程:`/etc/os-release` 检测 OS → 精确匹配 `built-index.tsv`(不回退)→ 校验 `binary-sha256`(防损坏)→ `exec run-sdcshield.sh`(设 `LD_LIBRARY_PATH`)。不匹配→硬停并指路 `build-all.sh <tag> --full` 重构建。
 
 ### 3.6 镜像推 ghcr.io(跨机/CI 共享)
 
@@ -139,8 +139,8 @@ tar xzf opendcdiag-openEuler-24.03LTS_SP3-*.tar.gz
 
 # 气隙(无网):导 oci tarball,拷到现场 podman load
 ./scripts/offline-build/images/build-images.sh 24.03 SP3 --tar
-# → dist/images/opendcdiag-offline-24.03-LTS-SP3.oci.tar(~1.6GB)
-# 现场:podman load < opendcdiag-offline-24.03-LTS-SP3.oci.tar
+# → dist/images/sdcshield-offline-24.03-LTS-SP3.oci.tar(~1.6GB)
+# 现场:podman load < sdcshield-offline-24.03-LTS-SP3.oci.tar
 ```
 
 CI 直接 `podman pull ghcr.io/...:<tag>`,无需每 job 重建镜像。
@@ -232,7 +232,7 @@ build-all.sh --all --full → 全 PASS, 0 fail, 0 crash(见 §3.3 表)
 
 # ghcr push 实测
 build-images.sh 24.03 SP3 --push --force
-  → 推 ghcr.io/wangxumarshall/opendcdiag-offline:24.03-LTS-SP3 ✓
+  → 推 ghcr.io/wangxumarshall/sdcshield-offline:24.03-LTS-SP3 ✓
   → manifest remote=yes, image-digest=sha256:07982eb8... ✓
 podman pull ghcr.io/.../24.03-LTS-SP3 → 拉回,gcc 12.3.1/find/meson 全可用 ✓
 
@@ -261,8 +261,8 @@ selftest_sigill 用 .inst 仍触发 SIGILL(code 4, ILL_ILLOPC)✓
 
 ```bash
 # === 构建机(aarch64 openEuler 或任意 aarch64 + podman)===
-git clone --recurse-submodules https://github.com/wangxumarshall/opendcdiag-arm.git
-cd opendcdiag-arm && git checkout main
+git clone --recurse-submodules https://github.com/wangxumarshall/sdcshield.git
+cd sdcshield && git checkout main
 git submodule update --init --recursive
 # (可选)ghcr 授权:echo $GHCR_TOKEN | podman login ghcr.io -u wangxumarshall --password-stdin
 
@@ -272,10 +272,10 @@ git submodule update --init --recursive
 
 # 产出现场包(任选版本):
 ./scripts/offline-build/package-release.sh 24.03 SP3
-# → dist/opendcdiag-openEuler-24.03LTS_SP3-*.tar.gz
+# → dist/sdcshield-openEuler-24.03LTS_SP3-*.tar.gz
 
 # === 目标机 ===
-tar xzf opendcdiag-openEuler-24.03LTS_SP3-*.tar.gz && ./run.sh -e zstd19 -t 2000 -n 1
+tar xzf sdcshield-openEuler-24.03LTS_SP3-*.tar.gz && ./run.sh -e zstd19 -t 2000 -n 1
 # 期望:exit: pass(run.sh 自动检测 OS 精确匹配)
 ```
 

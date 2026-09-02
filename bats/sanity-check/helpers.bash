@@ -124,7 +124,7 @@ selftest_crash_context_common() {
     fi
 
     if [[ `uname -m` = x86_64 ]] && [[ "$SANDSTONE_DEVICE_TYPE" != "GPU" ]]; then
-        # OpenDCDiag's built-in register dumper is only implemented for x86-64.
+        # SDCShield's built-in register dumper is only implemented for x86-64.
         # Scan messages to find the one containing "Registers:".
         local msgcount=$((yamldump[/tests/0/threads/$threadidx/messages@len]))
         local regmsgidx=-1

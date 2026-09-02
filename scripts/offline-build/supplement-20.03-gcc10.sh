@@ -2,7 +2,7 @@
 # supplement-20.03-gcc10.sh — 为 20.03 各 SP 的 RPM 子目录补充 GCC-10 工具链 + meson 0.59。
 #
 # 背景: openEuler 20.03 全 SP 的仓库只含 gcc-7.3.0(无 <span>/<=>/<bit>),
-# 无法编译 OpenDCDiag 的 C++20/23 源码。20.03-SP4 仓库额外提供 gcc-10.3.0 系列
+# 无法编译 SDCShield 的 C++20/23 源码。20.03-SP4 仓库额外提供 gcc-10.3.0 系列
 # (与 22.03 同版本), 故从 20.03-SP4 仓库补 gcc-10 全家桶到每个 20.03 SP 子目录。
 # meson: 20.03 自带 0.54 太旧(缺 meson.project_source_root, 0.56+ 才有),
 # 从 22.03 仓库补 meson 0.59 noarch 包。

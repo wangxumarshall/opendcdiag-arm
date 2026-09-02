@@ -1,15 +1,15 @@
 /*
  *  memcpy_rewr.cpp - producer/consumer memcpy coherence stress test for
- *  OpenDCDiag (ARM64).
+ *  SDCShield (ARM64).
  *
  *  Origin: a standalone GlusterFS-IOT-scheduler-derived MPSC stress tool
  *  (memcpy_rewr.c) that spawns pinned producer/consumer pthreads, routes
  *  requests through a 4-priority linked-list queue, and - crucially -
  *  checks that memcpy of the per-thread mem_info_s buffers yields byte-
  *  identical copies across b1..b5. A mismatch that does *not* crash is
- *  exactly the silent-data-corruption (SDC) OpenDCDiag exists to catch.
+ *  exactly the silent-data-corruption (SDC) SDCShield exists to catch.
  *
- *  Port to OpenDCDiag
+ *  Port to SDCShield
  *  ------------------
  *  - The standalone main()+pthread_create is replaced by the framework's
  *    forked-child + per-CPU worker-thread model. Each test_run(test,cpu)
@@ -216,7 +216,7 @@ static unsigned long myget_cycles(void)
 }
 
 /* ---- per-test shared state ----
- * In the standalone tool these were globals; in OpenDCDiag they live in a
+ * In the standalone tool these were globals; in SDCShield they live in a
  * struct hung off test->data so the (forked) child's test_cleanup can free
  * them and so multiple tests never collide.
  */
@@ -244,7 +244,7 @@ struct memcpy_rewr_state {
 
 /*
  * Per-thread buffers. The original tool used __thread globals for m_tester
- * (~10 MiB) and m_tmp (2 MiB). Under OpenDCDiag that does not work: the
+ * (~10 MiB) and m_tmp (2 MiB). Under SDCShield that does not work: the
  * framework spawns up to 192 worker threads each with an 8 MiB stack, and
  * the ~12 MiB of __thread storage per thread overflows it (SIGSEGV on
  * first touch). We therefore keep them per-thread but heap-allocate them
@@ -485,7 +485,7 @@ static int do_iot_schedule(memcpy_rewr_state *st, iot_conf_t *conf,
 /*
  * In the upstream tool SYNCOP is a synchronous RPC: the producer enqueues a
  * request and blocks in __yield() until the consumer __wake()s it. That works
- * with one or a handful of producers, but under OpenDCDiag's fullsystem mode
+ * with one or a handful of producers, but under SDCShield's fullsystem mode
  * the framework owns the time budget: when the test slot elapses it asks
  * threads to stop via test_time_condition(), but a producer stuck in __yield's
  * unbounded pthread_cond_wait would never notice and deadlock. We keep the
@@ -554,7 +554,7 @@ static role role_for_cpu(memcpy_rewr_state *st, int cpu)
     return (cpu % 2 == 0) ? ROLE_PRODUCER : ROLE_CONSUMER;
 }
 
-/* ---- OpenDCDiag test entry points ---- */
+/* ---- SDCShield test entry points ---- */
 
 static int memcpy_rewr_init(struct test *test)
 {

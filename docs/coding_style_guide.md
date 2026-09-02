@@ -1,11 +1,11 @@
-# OpenDCDiag Coding Style Guidelines
+# SDCShield Coding Style Guidelines
 
 ## General Guidelines
 
 * Software should be written in **C++ 20** or **C17** and compile using **GCC-10**.
 * All software must be written for cross-platform execution on both **Linux** and **Microsoft Windows**.   Use the `_WIN32` and `__linux__` macros provided.
 * All code must compile and link without warnings.
-* All software must conform to the licensing requirements for OpenDCDiag as provided in the LICENSE file.
+* All software must conform to the licensing requirements for SDCShield as provided in the LICENSE file.
 * If a patch changes existing files, try to minimize the lines changed as much as possible and please preserve the existing formatting and style.
 
 ## Coding Guidelines and Naming Convention
