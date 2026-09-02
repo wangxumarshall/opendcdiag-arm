@@ -58,15 +58,29 @@ SP4   ...LTS_SP4                 ...LTS_SP4                 ...LTS_SP4
 
 构建全 15:`./scripts/offline-build/build-all.sh --all --full`(发布闸门)。
 
+### RPM 目录结构
+
+每个 SP 子目录(`third-party/rpms/openEuler-XX.03/openEuler-XX.03LTS[_SPx]/`)只含两类内容:
+
+```
+openEuler-24.03LTS_SP3/
+├── rpms/        # 该 SP 全部依赖 *.rpm(324~437 个,从 repo.openeuler.org 下载)
+└── built/       # 构建产物: sdcshield + libs/ + run-sdcshield.sh + BUILD-HASH + MANIFEST.tsv + VERSION
+```
+
+所有脚本(下载/镜像烘焙/构建/打包/验证)统一从 `<SP 目录>/rpms/` 取 RPM;容器内挂载点仍为 `/rpms`。
+
 ### 15 SP 全 full 验证(已实测,100% 可重现)
 
 全 15 个 SP 各自 full 验证(eigen -n1 + 全量 -n8,纯净容器只挂 built/)全 PASS,0 fail 0 crash:
 
 | 系列 | LTS | SP1 | SP2 | SP3 | SP4 |
 |---|---|---|---|---|---|
-| 24.03 (gcc-12) | pass 1253 | 1286 | 1542 | 1758 | 2840 |
-| 22.03 (gcc-10) | pass 3812 | 2642 | 2429 | 3831 | 2326 |
-| 20.03 (gcc-10 toolset) | pass 2586 | 3610 | 2940 | 1145 | 1011 |
+| 24.03 (gcc-12) | pass 34881 | 35089 | 33557 | 33413 | 33760 |
+| 22.03 (gcc-10) | pass 31727 | 35748 | 31835 | 32606 | 31495 |
+| 20.03 (gcc-10 toolset) | pass 30191 | 30300 | 31669 | 31356 | 30382 |
+
+> 2026-09-02 全 15 full 验证(实测):全部 `RESULT: PASS`、fail=0、crashes=0、eigen_fails=[]。各 SP full-suite(-n8)pass 数如上(skip=8)。覆盖三系列 + 最老(gcc-7+toolset-10)/基准(gcc-12)toolchain。容器内对源码副本零修改(4 段 sed 全收敛到源码/meson option,只剩 CXXFLAGS/polyfill 注入 + -D)。
 
 > 全部 fail=0, 0 crash。覆盖三系列 + 最老(gcc-7+toolset-10)/基准(gcc-12)toolchain。容器内对源码副本零修改(4 段 sed 全收敛到源码/meson option,只剩 CXXFLAGS/polyfill 注入 + -D)。
 

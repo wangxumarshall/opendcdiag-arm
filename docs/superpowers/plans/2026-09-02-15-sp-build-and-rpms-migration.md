@@ -47,7 +47,7 @@
 - Produces: `openEuler-XX.03LTS[_SPx]/rpms/` 目录(所有 *.rpm 在内);`built/`、`.os-version` 原地不动。
 - 后续 Task 2 的脚本适配将引用 `$SP_DIR/rpms`。
 
-- [ ] **Step 1: 逐 submodule 执行 git mv(保留 git 历史重命名检测)**
+- [x] **Step 1: 逐 submodule 执行 git mv(保留 git 历史重命名检测)**
 
 ```bash
 cd /home/sdc/wangxu/opendcdiag-arm
@@ -68,7 +68,7 @@ done
 
 预期:每目录 root=0,rpms=324~437(与迁移前 root 数一致)。
 
-- [ ] **Step 2: 三个 submodule 分别提交**
+- [x] **Step 2: 三个 submodule 分别提交**
 
 ```bash
 for s in 20.03 22.03 24.03; do
@@ -102,7 +102,7 @@ done
 - Consumes: Task 1 的 `.../openEuler-XX.03LTS[_SPx]/rpms/` 结构。
 - Produces: 所有脚本统一从 `$SP_DIR/rpms` 取 RPM;容器内 `/rpms` 挂载点与 Containerfile 不变(挂载源改为 rpms/ 子目录)。
 
-- [ ] **Step 1: 逐脚本修改 RPM 路径**
+- [x] **Step 1: 逐脚本修改 RPM 路径**
 
 各文件的具体改动(共 11 处,全部是"SP 目录 → SP 目录/rpms"):
 
@@ -117,7 +117,7 @@ done
 9. `download-deps.sh:90`、`install-deps.sh:61,113`: OUTDIR 加 `/rpms`(install-deps.sh 操作的是"传入目录",改为调用方传 rpms/ 或脚本内 `cd rpms/`,以实际代码为准)
 10. `supplement-20.03-gcc10.sh`: 下载落点加 `/rpms`
 
-- [ ] **Step 2: 回归验证已构建的 24.03 LTS 全链路**
+- [x] **Step 2: 回归验证已构建的 24.03 LTS 全链路**
 
 ```bash
 cd /home/sdc/wangxu/opendcdiag-arm
@@ -131,7 +131,7 @@ cd /home/sdc/wangxu/opendcdiag-arm
 
 预期:build-images 报 skip;container-build 261/261 + list-tests 208 + zstd19 pass;pristine `RESULT: PASS`。
 
-- [ ] **Step 3: 提交(主仓)**
+- [x] **Step 3: 提交(主仓)**
 
 ```bash
 git add scripts/offline-build/
@@ -178,7 +178,7 @@ podman images --format '{{.Repository}}:{{.Tag}}' | grep '^quay.io/openeuler/ope
 
 **Files:** 无代码改动(用 build-all.sh 编排;submodule built/ 会更新)。
 
-- [ ] **Step 1: 串行跑 build-all --all --full**
+- [x] **Step 1: 串行跑 build-all --all --full**
 
 ```bash
 cd /home/sdc/wangxu/opendcdiag-arm
@@ -189,7 +189,7 @@ cd /home/sdc/wangxu/opendcdiag-arm
 
 预计耗时:15 × (烘焙 2-5min + 构建 ~4min + full 验证 ~6min) ≈ 3-4 小时。若中途个别 SP 失败,单独重跑该 SP 并记录真实失败原因,不得跳过或谎报。
 
-- [ ] **Step 2: 结果汇总核验**
+- [x] **Step 2: 结果汇总核验**
 
 ```bash
 grep -E '^RESULT:' build-out/build-all-15.log | sort | uniq -c
@@ -199,7 +199,7 @@ grep -E '^RESULT:' build-out/build-all-15.log | sort | uniq -c
 
 ### Task 5: 提交产物 + 推送(主仓与 3 个 submodule)
 
-- [ ] **Step 1: submodule built/ 产物提交(每系列一个提交)**
+- [x] **Step 1: submodule built/ 产物提交(每系列一个提交)**
 
 ```bash
 for s in 20.03 22.03 24.03; do
@@ -213,7 +213,7 @@ verification PASS (eigen -n1 fail=0, full -n8 0 fail 0 crash)."
 done
 ```
 
-- [ ] **Step 2: 主仓 submodule 指针 + manifest 提交推送**
+- [x] **Step 2: 主仓 submodule 指针 + manifest 提交推送**
 
 ```bash
 git add third-party/rpms/ scripts/offline-build/images/image-manifest.tsv
@@ -225,7 +225,7 @@ subdirectories; submodule pointers updated accordingly."
 git push
 ```
 
-- [ ] **Step 3: 文档同步(大颗粒度修改)**
+- [x] **Step 3: 文档同步(大颗粒度修改)**
 
 更新 `scripts/offline-build/README.md` 与 `docs/multi-version-build-deploy.md` 中涉及 RPM 目录结构的路径描述(README 里 `ls third-party/rpms/.../*.rpm` 示例等),确保 100% 反映 rpms/ 新结构。
 

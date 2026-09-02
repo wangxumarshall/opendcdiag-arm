@@ -35,7 +35,7 @@
 ┌──────────────────────────▼──────────────────────────────────────┐
 │ 依赖层   3 个 RPM submodule (git, 各 1~1.7GB)                   │
 │   openEuler-20.03 (1.7G)  22.03 (977M)  24.03 (1.2G)            │
-│   每系列 5 个 SP 子目录,各 ~200-340MB RPM + built/ 产物         │
+│   每系列 5 个 SP 子目录,各 ~200-340MB: rpms/*.rpm + built/ 产物 │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ Containerfile COPY (构建时)
 ┌──────────────────────────▼──────────────────────────────────────┐
@@ -485,9 +485,11 @@ sdcshield/
 │   ├── cpp23_polyfill.h             (已有: C++23 polyfill)
 │   └── (收敛后: string/contains shim, selftest udf 不再 sed)
 └── third-party/rpms/                 (submodule, 已有)
-    ├── openEuler-20.03/  .../built/  (产物沉淀, 已有)
-    ├── openEuler-22.03/  .../built/
-    └── openEuler-24.03/  .../built/
+    ├── openEuler-20.03/
+    │   ├── openEuler-20.03LTS[_SPx]/rpms/   (该 SP 全部 *.rpm)
+    │   └── openEuler-20.03LTS[_SPx]/built/  (产物沉淀)
+    ├── openEuler-22.03/   (同上: 每 SP 一个 rpms/ + built/)
+    └── openEuler-24.03/   (同上)
 ```
 
 主仓新增总体积:`Containerfile.template` + `build-images.sh` + `build-all.sh` + `package-release.sh` + 两个 tsv ≈ **< 25KB**。永不膨胀。
