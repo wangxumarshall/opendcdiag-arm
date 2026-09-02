@@ -175,9 +175,14 @@ build_one() {
         return 0
     fi
 
-    # 拉 base(quay SP tag)
-    echo "  拉 base: quay.io/openeuler/openeuler:${QUAY_TAG}"
-    podman pull "quay.io/openeuler/openeuler:${QUAY_TAG}" >/dev/null
+    # 拉 base(quay SP tag)。本地已有同名 base(如经 docker save|podman load 导入)则
+    # 跳过 pull — quay 直连在部分网络下会无限挂起,本地镜像内容一致。
+    if podman image exists "quay.io/openeuler/openeuler:${QUAY_TAG}" 2>/dev/null; then
+        echo "  base 已在本地: quay.io/openeuler/openeuler:${QUAY_TAG} (跳过 pull)"
+    else
+        echo "  拉 base: quay.io/openeuler/openeuler:${QUAY_TAG}"
+        podman pull "quay.io/openeuler/openeuler:${QUAY_TAG}" >/dev/null
+    fi
 
     # podman build
     echo "  构建:podman build ..."
