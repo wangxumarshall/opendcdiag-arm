@@ -6,20 +6,20 @@ SDCShield (ARM64, derived from OpenDCDiag) 离线构建依赖 RPM 树。
 
 | 子模块 | 远程仓 | 覆盖版本 |
 |---|---|---|
-| `openEuler-20.03/` | [opendcdiag-arm-rpm-20.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-20.03) | 20.03 LTS / SP1 / SP2 / SP3 / SP4 |
-| `openEuler-22.03/` | [opendcdiag-arm-rpm-22.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-22.03) | 22.03 LTS / SP1 / SP2 / SP3 / SP4 |
-| `openEuler-24.03/` | [opendcdiag-arm-rpm-24.03](https://github.com/wangxumarshall/opendcdiag-arm-rpm-24.03) | 24.03 LTS / SP1 / SP2 / SP3 / SP4 |
+| `openEuler-20.03/` | [sdcshield-rpm-20.03](https://github.com/wangxumarshall/sdcshield-rpm-20.03) | 20.03 LTS / SP1 / SP2 / SP3 / SP4 |
+| `openEuler-22.03/` | [sdcshield-rpm-22.03](https://github.com/wangxumarshall/sdcshield-rpm-22.03) | 22.03 LTS / SP1 / SP2 / SP3 / SP4 |
+| `openEuler-24.03/` | [sdcshield-rpm-24.03](https://github.com/wangxumarshall/sdcshield-rpm-24.03) | 24.03 LTS / SP1 / SP2 / SP3 / SP4 |
 
 ## 结构(submodule)
 
 ```
-sdcshield (原 opendcdiag-arm, 主仓)
+sdcshield (主仓)
 └── third-party/
     ├── eigen5/               # 仓内 Eigen 5(aarch64 构建用,详见主仓 CLAUDE.md)
     └── rpm/                  # 本目录
-        ├── openEuler-20.03/  (submodule → opendcdiag-arm-rpm-20.03)
-        ├── openEuler-22.03/  (submodule → opendcdiag-arm-rpm-22.03)
-        └── openEuler-24.03/  (submodule → opendcdiag-arm-rpm-24.03, 含 SP3 基准版本)
+        ├── openEuler-20.03/  (submodule → sdcshield-rpm-20.03)
+        ├── openEuler-22.03/  (submodule → sdcshield-rpm-22.03)
+        └── openEuler-24.03/  (submodule → sdcshield-rpm-24.03, 含 SP3 基准版本)
 ```
 
 克隆主仓时用 `git clone --recurse-submodules` 获取全部子模块。
