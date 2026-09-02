@@ -42,7 +42,7 @@ esac
 
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
 IMG="localhost/openeuler-offline:${SERIES}-${SP_LABEL}"
-RPMDIR_HOST="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}"
+RPMDIR_HOST="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/rpms"
 OUTDIR_HOST="$SRC_ROOT/build-out/${OS_TAG}"
 
 [ -d "$RPMDIR_HOST" ] || { echo "RPM dir missing: $RPMDIR_HOST" >&2; exit 1; }

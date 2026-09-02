@@ -30,8 +30,8 @@ esac
 
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
 BIN="$SRC_ROOT/build-out/${OS_TAG}/sdcshield"
-RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}"
-OUTDIR="$RPMDIR/built"
+RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/rpms"
+OUTDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/built"
 
 [ -f "$BIN" ] || { echo "二进制不存在: $BIN" >&2; exit 1; }
 [ -d "$RPMDIR" ] || { echo "RPM 目录不存在: $RPMDIR" >&2; exit 1; }
@@ -55,7 +55,7 @@ IMG="localhost/openeuler-offline:${SERIES}-LTS${SP#LTS}"
 LIBS_FILE="$(mktemp)"
 timeout 120 podman run --rm --user=0 \
     -v "$SRC_ROOT/build-out/${OS_TAG}:/b:ro,Z" \
-    -v "$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}:/rpms:ro,Z" \
+    -v "$RPMDIR:/rpms:ro,Z" \
     "$IMG" bash -c '
 mkdir -p /var/tmp /tmp
 rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true
@@ -82,7 +82,7 @@ done < "$LIBS_FILE"
 if [ "$SERIES" = "20.03" ]; then
     TOOLSET_LIBS="/opt/openEuler/gcc-toolset-10/root/usr/lib64"
     timeout 120 podman run --rm --user=0 \
-        -v "$SRC_ROOT/third-party/rpms/openEuler-20.03/${OS_TAG}:/rpms:ro" \
+        -v "$SRC_ROOT/third-party/rpms/openEuler-20.03/${OS_TAG}/rpms:/rpms:ro" \
         "$IMG" bash -c "mkdir -p /var/tmp /tmp; rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true; for p in gcc-toolset-10-libstdc++ gcc-toolset-10-libgcc gcc-toolset-10-libatomic gcc-toolset-10-libgomp; do f=\$(ls /rpms/\${p}-*.rpm 2>/dev/null|head -1); [ -n \"\$f\" ] && rpm -Uvh --nodeps --force \"\$f\" >/dev/null 2>&1; done; ls $TOOLSET_LIBS/libstdc++.so* $TOOLSET_LIBS/libgcc_s.so* $TOOLSET_LIBS/libatomic.so* $TOOLSET_LIBS/libgomp.so* 2>/dev/null" \
         2>/dev/null | while IFS= read -r f; do [ -n "$f" ] && echo "$f"; done > /tmp/toolset-libs.txt
     # 把 toolset lib 路径加入待拷
@@ -111,7 +111,7 @@ done
 # 20.03-LTS 最小镜像无 GNU tar, 但有 bsdtar (libarchive); 用 `command -v` 兼容。
 if [ "$SERIES" = "20.03" ]; then
     timeout 120 podman run --rm --user=0 \
-        -v "$SRC_ROOT/third-party/rpms/openEuler-20.03/${OS_TAG}:/rpms:ro" \
+        -v "$SRC_ROOT/third-party/rpms/openEuler-20.03/${OS_TAG}/rpms:/rpms:ro" \
         "$IMG" bash -c '
 mkdir -p /var/tmp /tmp
 rpm -Uvh --nodeps --force /rpms/findutils-*.rpm >/dev/null 2>&1 || true
@@ -140,7 +140,7 @@ rm -f "$LIBS_FILE" /tmp/toolset-libs.txt
 #   注意: libatomic RPM 只在各系列的 LTS 目录里(GCC 版本全系列共享), SP1-SP4 目录没有,
 #   所以一律从该系列 LTS 目录取, 而非当前 SP 目录。
 if [ "$SERIES" = "22.03" ] || [ "$SERIES" = "24.03" ]; then
-    LTS_RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/openEuler-${SERIES}LTS"
+    LTS_RPMDIR="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/openEuler-${SERIES}LTS/rpms"
     LIBATOMIC_RPM=$(ls "$LTS_RPMDIR"/libatomic-*.rpm 2>/dev/null | head -1)
     if [ -n "$LIBATOMIC_RPM" ]; then
         rm -rf /tmp/libatomic-extract && mkdir /tmp/libatomic-extract

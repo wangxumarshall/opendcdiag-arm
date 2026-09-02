@@ -40,8 +40,13 @@ RPMDIR="$(cd "$RPMDIR" && pwd)"
 cd "$RPMDIR"
 
 # ---- 版本管控: 严格比对下载标记与目标机版本 ----
-OS_TAG="$RPMDIR/.os-version"
-if [ -f "$OS_TAG" ]; then
+# .os-version 查找顺序: $RPMDIR 自身 → 上级 SP 根目录 (submodule 布局中 RPM 在
+# <SP-dir>/rpms/ 而 .os-version 留在 <SP-dir>/ 根)。
+OS_TAG=""
+for cand in "$RPMDIR/.os-version" "$RPMDIR/../.os-version"; do
+    [ -f "$cand" ] && { OS_TAG="$cand"; break; }
+done
+if [ -n "$OS_TAG" ] && [ -f "$OS_TAG" ]; then
     DOWNLOAD_OS=$(cat "$OS_TAG" | tr -d '[:space:]')
     TARGET_OS=$(detect_os_version_full)
     if [ "$DOWNLOAD_OS" != "$TARGET_OS" ]; then
@@ -54,7 +59,7 @@ if [ -f "$OS_TAG" ]; then
     fi
     echo "==> 版本核对通过: $TARGET_OS (下载机与目标机一致)"
 else
-    echo "警告: $RPMDIR/.os-version 标记缺失 (RPM 树可能是旧版脚本下载的)。" >&2
+    echo "警告: .os-version 标记缺失 (RPM 树可能是旧版脚本下载的)。" >&2
     echo "       跳过版本核对。若遇降级冲突, 请用新版 download-deps.sh 重下。" >&2
 fi
 

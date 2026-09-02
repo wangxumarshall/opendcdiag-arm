@@ -114,8 +114,9 @@ echo "############ build-all: series=[$SERIES_LIST] sp=[$SP_LIST] mode=$MODE for
 build_one() {
     local series="$1" sp="$2"
     local tag="openEuler-${series}$(case "$sp" in LTS) echo LTS;; SP[1-4]) echo LTS_$sp;; esac)"
-    local rpmdir="$SRC_ROOT/third-party/rpms/openEuler-${series}/${tag}"
-    local builtdir="$rpmdir/built"
+    local spdir="$SRC_ROOT/third-party/rpms/openEuler-${series}/${tag}"
+    local rpmdir="$spdir/rpms"
+    local builtdir="$spdir/built"
     echo ""
     echo "==================== $tag ===================="
 

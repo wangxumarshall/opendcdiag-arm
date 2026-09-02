@@ -59,7 +59,7 @@ parse_sp() {
     OS_TAG="openEuler-${series}${SP_DIR}"
     LOCAL_TAG="${LOCAL_PREFIX}:${series}-${SP_LABEL}"
     REMOTE_TAG="${GHCR}:${series}-${SP_LABEL}"
-    RPM_DIR="$SRC_ROOT/third-party/rpms/openEuler-${series}/${OS_TAG}"
+    RPM_DIR="$SRC_ROOT/third-party/rpms/openEuler-${series}/${OS_TAG}/rpms"
 }
 
 # ── 输入哈希:Containerfile 内容 + RPM submodule pin + 宏 + base tag ──
