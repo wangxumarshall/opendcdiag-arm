@@ -61,7 +61,7 @@ download_one() {
 
 supplement_sp() {
     local sp_dir_name="$1"   # openEuler-20.03LTS_SP3
-    local dest="$BASE20/$sp_dir_name"
+    local dest="$BASE20/$sp_dir_name/rpms"
     [ -d "$dest" ] || { echo "目录不存在: $dest" >&2; return 1; }
     echo "=== 补充 $sp_dir_name ==="
     for pkg in "${GCC10_PKGS[@]}"; do

@@ -42,7 +42,7 @@ esac
 
 OS_TAG="openEuler-${SERIES}${SP_DIR}"
 IMG="localhost/openeuler-offline:${SERIES}-${SP_LABEL}"
-RPMDIR_HOST="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}"
+RPMDIR_HOST="$SRC_ROOT/third-party/rpms/openEuler-${SERIES}/${OS_TAG}/rpms"
 OUTDIR_HOST="$SRC_ROOT/build-out/${OS_TAG}"
 
 [ -d "$RPMDIR_HOST" ] || { echo "RPM dir missing: $RPMDIR_HOST" >&2; exit 1; }
@@ -239,7 +239,9 @@ ACL_LIB="/usr/lib64"
 CLANG_RT="/usr/lib/clang/17"
 [ -d "$ACL_HDR" ] && EXTRA_MESON+=("-Dacl_incdir=$ACL_HDR")
 EXTRA_MESON_STR="${EXTRA_MESON[*]:-}"
-MOUNTS=(-v "$SRC_ROOT:/src:ro" -v "$RPMDIR_HOST:/rpms:ro" -v "$OUTDIR_HOST:/out" -v "$INNER_HOST:$INNER:ro")
+# :Z 让 podman 给挂载点打 SELinux 私有标签(容器可 exec 挂载的脚本/二进制),
+# 否则 SELinux enforcing 系统会 "Permission denied"(与 verify-built-pristine.sh 一致)。
+MOUNTS=(-v "$SRC_ROOT:/src:ro,Z" -v "$RPMDIR_HOST:/rpms:ro,Z" -v "$OUTDIR_HOST:/out:Z" -v "$INNER_HOST:$INNER:ro,Z")
 # 20.03 用 meson 源码包 (RPM 版的 meson 0.59 跑不动于 python3.7)。
 # 源码包入仓 third-party/meson/meson-0.59.4(11M, 纯源码, 可复现)。
 [ "$SERIES" = "20.03" ] && [ -d "$SRC_ROOT/third-party/meson/meson-0.59.4" ] && \

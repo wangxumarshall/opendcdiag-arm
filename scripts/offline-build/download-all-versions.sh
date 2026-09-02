@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 
 # 基准: 24.03 SP3 的包名列表(所有版本都与之取交集)
-mapfile -t BASELINE_PKGS < <(ls third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/*.rpm 2>/dev/null | xargs -n1 basename | sed -E 's/-[0-9].*//' | sort -u)
+mapfile -t BASELINE_PKGS < <(ls third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/rpms/*.rpm 2>/dev/null | xargs -n1 basename | sed -E 's/-[0-9].*//' | sort -u)
 echo "基准包名数: ${#BASELINE_PKGS[@]}"
 
 MIRROR="https://repo.openeuler.org"
@@ -64,7 +64,7 @@ query_all_pkg_names() {
 download_version() {
     local repover="$1" dirname="$2"
     local outdir
-    outdir="$(series_dir "$dirname")/$dirname"
+    outdir="$(series_dir "$dirname")/$dirname/rpms"
     mkdir -p "$outdir"
     echo "========== $dirname (仓库: $repover, 输出: $outdir) =========="
 
@@ -97,7 +97,7 @@ download_version() {
 
 for entry in "${VERSIONS[@]}"; do
     repover="${entry%%|*}"; dirname="${entry##*|}"
-    local_dir="$(series_dir "$dirname")/$dirname"
+    local_dir="$(series_dir "$dirname")/$dirname/rpms"
     if [ -d "$local_dir" ] && [ "$(ls "$local_dir"/*.rpm 2>/dev/null | wc -l)" -gt 100 ]; then
         echo "跳过 $dirname (已存在)"; continue
     fi
@@ -108,6 +108,6 @@ echo ""; echo "========== 全部完成 =========="
 for series in third-party/rpms/openEuler-*/; do
     [ -d "$series" ] || continue
     for d in "$series"openEuler-*/; do
-        [ -d "$d" ] && echo "  $(basename $d): $(ls $d/*.rpm 2>/dev/null | wc -l) RPM"
+        [ -d "$d/rpms" ] && echo "  $(basename $d): $(ls $d/rpms/*.rpm 2>/dev/null | wc -l) RPM"
     done
 done

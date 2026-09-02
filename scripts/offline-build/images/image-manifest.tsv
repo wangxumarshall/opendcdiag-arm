@@ -2,3 +2,6 @@
 # sp-tag | input-hash | containerfile-sha | rpm-pin | macro | quay-base | image-digest | local? | remote? | built-date | size-MB
 # 由 build-images.sh 自动维护。input-hash 变化触发重建。
 sp-tag	input-hash	containerfile-sha	rpm-pin	macro	quay-base	image-digest	local	remote	built-date	size-MB
+22.03-LTS	99a737722cfdad3bf77323aa176f6c1cd2ea4940060670e7c3f84298e87b16f7	beba18bd8e7bc0cebfc50988a9a992713b6601e0626a7f3dc3895f82a71fd27a	7d3ce66260879dc3441eed4e50f073810eb61d12	OPENEULER_22_03	22.03-lts	sha256:ed3f9a76269323c81882d7bd7e5c6222f2ce5fe504d0bb52f2ff780dc25ea5c7	yes	no	2026-09-02 07:28:29	1635
+20.03-LTS	d08d1b03258baba8c6bc5d2223800af7075affc571aa8184390518f10032da26	beba18bd8e7bc0cebfc50988a9a992713b6601e0626a7f3dc3895f82a71fd27a	4a11f87c7740d0ef93246a66b76ee979bd44a0ae	OPENEULER_20_03	20.03-lts	sha256:4cd4af30cd5f2d63674d5524db852c74bc5d1c833ff6928f4e8d77178af1be00	yes	no	2026-09-02 07:30:08	2891
+24.03-LTS	ae5d1d7c1357bb84f39a61c449a9cfdd339e820c9ca2de31c8f1334e7b47bbe4	beba18bd8e7bc0cebfc50988a9a992713b6601e0626a7f3dc3895f82a71fd27a	b0b3c0f641ebef1b55aafbdd577cd67e2c4eb254	none	24.03-lts	sha256:9217a79c88d88e427a280d4a38998cb47fa7ee15abd4919553c3f6f2e8c579fc	yes	no	2026-09-02 06:26:27	1480
