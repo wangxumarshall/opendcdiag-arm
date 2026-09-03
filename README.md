@@ -26,7 +26,7 @@ cd third-party/rpms/openEuler-24.03/openEuler-24.03LTS_SP3/built
 ./run-sdcshield.sh --list-tests            # 自动设 LD_LIBRARY_PATH=./libs
 ./run-sdcshield.sh -T forever -t 60s -Y -F                # 首次检测到SDC后，停止 
 ./run-sdcshield.sh -T forever -t 60s -Y -ignore-timeout   # 一起跑，就算检测到SDC后，也一直往后跑
-./run-sdcshield.sh -T forever -t 600s -Y -e "fma*" -e "eigen_svd*" -e "eigen_gemm*" -e "zstd*" -e "zlib*" 
+./run-sdcshield.sh -T forever -t 600s -Y -e "eigen_svd*" -e "eigen_gemm*" -e "fma*" -e "zstd*" -e "zlib*" 
 ./run-sdcshield.sh -t 60s -n 1 -e zstd19 # 单线程，规避大核数 ULP 数值 flakiness
 ```
 
