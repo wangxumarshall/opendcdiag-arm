@@ -94,6 +94,34 @@ cd sdcshield && git checkout feat/multi-version-build-deploy
 
 > `run.sh` 部署逻辑：检测本机 OS → 精确匹配 `built-index.tsv`（不跨版本回退）→ 校验 `binary-sha256` → `exec run-sdcshield.sh`（设 `LD_LIBRARY_PATH` 指向随包 `libs/`）。
 
+#### 一键式全流程：`release-all.sh`（agent/CI 首选入口）
+
+**一条命令完成全部工作**：base 镜像拉取（docker hub 加速器拉取→podman load→tag 为 quay.io 命名，绕过 quay 直连挂起）→ 15 版本镜像烘焙 → 容器内构建 → 打包 → full 纯净验证 → 提交推送（3 个 RPM submodule + 主仓）：
+
+```console
+./scripts/offline-build/release-all.sh              # 全流程（唯一需要记住的命令）
+./scripts/offline-build/release-all.sh --skip-base  # base 镜像已齐时（推荐，省去 docker 桥接）
+./scripts/offline-build/release-all.sh --help       # 全部选项
+```
+
+五个阶段（幂等，已就位自动 skip；任何阶段失败即停，退出码非零）：
+
+| 阶段 | 内容 | 通过标准 |
+|---|---|---|
+| 1 preflight | 分支/submodule/RPM 树自检 | 在 `main` 或 detached HEAD 上**拒绝**运行（CLAUDE.md 禁止推 main） |
+| 2 base | 15 个 `quay.io/openeuler/openeuler:*-lts[-spN]` 缺失则补齐 | `podman images` 核验 15/15 |
+| 3 build | `build-all.sh --all --full`（哈希 skip：输入未变的 SP 自动复用） | 退出码 0 |
+| 4 check | 日志硬闸 | **15 × `RESULT: PASS` 且 0 FAIL**，否则绝不进入推送 |
+| 5 push | 3 个 submodule `built/` 产物（快进校验后推 `origin/main`）+ 主仓指针/manifest（推当前特性分支） | 全部推送成功 |
+
+**给 agent 的调用要点**：
+- 耗时约 2~3 小时（15 × 构建+full 验证），建议后台运行 + 定期轮询 `build-out/release-all-build.latest.log` 中的 `RESULT:` 行。
+- 全程日志：`build-out/release-all-<时间戳>.log`（gitignored）；完成后核对末尾 `release-all 完成`。
+- stage 2 拉 base 需要 root docker（sudo 交互提示）；已有全部镜像时该阶段秒级 skip，无需 sudo。
+- 提交信息由脚本自动生成（含当日日期与验证结论），无需人工干预。
+
+> 2026-09-02/03 全链路实测：15 × `RESULT: PASS`（fail=0, crashes=0, eigen_fails=[]），stage 5 自动完成 3 个 submodule + 主仓的提交与推送。
+
 完整设计与操作指南见 [docs/multi-version-build-deploy.md](docs/multi-version-build-deploy.md)（设计方案）与 [docs/multi-version-build-deploy-retrospective.md](docs/multi-version-build-deploy-retrospective.md)（一键复现指南 + 15 SP 全 full 验证基线 + 复现 gotcha）。快速开始速查见 [scripts/offline-build/README.md](scripts/offline-build/README.md)。
 
 

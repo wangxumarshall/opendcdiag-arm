@@ -28,6 +28,7 @@ cd sdcshield
 | `images/build-images.sh` | 烘焙构建依赖的容器镜像层(从 quay base + RPM 树强装)。幂等:输入哈希不变则 skip |
 | `container-build.sh` | 单 SP 源码构建(镜像已烘焙则跳过装包)。22.03/20.03 注入 polyfill + 版本宏 |
 | `build-all.sh` | 15 矩阵编排器(5 效率杠杆:deps 烘焙/哈希 skip/--since/-P 并行/smoke|full) |
+| `release-all.sh` | **一键式全流程**:base 镜像拉取(docker hub→podman 桥接)→ 烘焙 → 构建 → full 验证 → 提交推送(3 submodule + 主仓)。幂等,验证不过不推送 |
 | `package-built-artifacts.sh` | 产物进 RPM submodule 的 `built/`(二进制+libs+run+BUILD-HASH+MANIFEST+VERSION) |
 | `verify-built-pristine.sh` | 决定性闸门:纯净容器(只挂 built/)跑——"下载即跑" |
 | `package-release.sh` | 产出现场 tarball(~6MB,含 run.sh 自动检测 OS + 精确匹配) |
@@ -57,6 +58,20 @@ SP4   ...LTS_SP4                 ...LTS_SP4                 ...LTS_SP4
 ```
 
 构建全 15:`./scripts/offline-build/build-all.sh --all --full`(发布闸门)。
+
+### 一键式全流程(agent/CI 首选)
+
+```bash
+# 拉取 base → 烘焙 → 构建 → full 验证 → 提交推送,一条命令全做完:
+./scripts/offline-build/release-all.sh
+# base 镜像已齐时(推荐,跳过 docker 桥接):
+./scripts/offline-build/release-all.sh --skip-base
+```
+
+- 五阶段幂等(preflight → base → build → check → push),已就位自动 skip;任何阶段失败即停。
+- **硬闸**:check 阶段要求 15 × `RESULT: PASS` 且 0 FAIL,否则绝不推送;主仓在 `main`/detached 时拒绝运行。
+- 耗时约 2~3 小时;后台跑 + 轮询 `build-out/release-all-build.latest.log` 的 `RESULT:` 行。
+- 详细用法与 agent 调用要点见根 README「一键式全流程:release-all.sh」节。
 
 ### RPM 目录结构
 
