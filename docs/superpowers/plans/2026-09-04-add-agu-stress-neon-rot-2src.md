@@ -46,7 +46,7 @@
 4. 回归：`./builddir/sdcshield -e zstd19 -t 3000` — `exit: pass`
 5. x86-64 非回归：变更仅在 aarch64-only 构建块内（meson 检查确认）
 
-- [ ] Task 1 完成
+- [x] Task 1 完成
 
 ### Task 2: 集成 neon_rot_2src 到 arm64 分类
 
@@ -64,7 +64,7 @@
 4. 回归：`./builddir/sdcshield -e zstd19 -t 3000` — `exit: pass`
 5. x86-64 非回归：确认仅 aarch64 构建块变更
 
-- [ ] Task 2 完成
+- [x] Task 2 完成
 
 ## 备注
 
