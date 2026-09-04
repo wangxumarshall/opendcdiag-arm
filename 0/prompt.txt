@@ -1,0 +1,5 @@
+汇报进展
+
+---
+
+在当前测试框架中增加 agu_stress_2src.cpp  neon_rot_2src.cpp 这两个测试用例，放到 arm64分类中
