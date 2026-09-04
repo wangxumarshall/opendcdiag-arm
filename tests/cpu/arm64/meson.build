@@ -71,6 +71,14 @@ if host_machine.cpu_family() == 'aarch64'
         # a high-Hamming dependent FMA chain, all compared bit-exact against
         # libm. Built only on aarch64.
         'fsu_byteexact_arm.cpp',
+        # AGU throughput stress: 2 source loads + data-ALU + store/reload/
+        # store chain (3 ldr + 2 str per element), maximizing address-
+        # generation pressure. Rotation uses {add,eor,and,orr} — a different
+        # composition than mrn_nuke_2src_alu's {add,sub,eor,and} — to test
+        # rotation-composition robustness of the core-179 trigger recipe.
+        # Dual-arch inline asm (x86 movq / aarch64 str-ldr), placed in the
+        # ARM64 suite per the arm64 classification. Built only on aarch64.
+        'agu_stress_2src.cpp',
     )
 
     arm64_tests_lib = static_library(
