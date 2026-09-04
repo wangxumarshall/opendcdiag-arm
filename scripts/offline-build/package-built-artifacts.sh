@@ -48,8 +48,11 @@ chmod +x "$OUTDIR/sdcshield"
 #    方案: 在对应容器里跑 ldd, 提取 .so 路径, 只拷非 /lib64 /usr/lib64 系统路径
 #    的库(主要是 toolset 的 libstdc++/libgcc_s/libatomic, 以及 24.03 的 ACL)。
 echo "==> $OS_TAG: 收集运行时依赖库"
-IMG="localhost/openeuler-offline:${SERIES}-LTS${SP#LTS}"
-[ "$SP" = "LTS" ] && IMG="localhost/openeuler-offline:${SERIES}-LTS"
+# 规范化镜像 tag(与 container-build.sh/verify-built-pristine.sh 一致: LTS-SPx)
+case "$SP" in
+    LTS)   IMG="localhost/openeuler-offline:${SERIES}-LTS" ;;
+    SP[1-4]) IMG="localhost/openeuler-offline:${SERIES}-LTS-$SP" ;;
+esac
 
 # 收集 ldd 输出的库路径
 LIBS_FILE="$(mktemp)"

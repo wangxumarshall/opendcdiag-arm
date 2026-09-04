@@ -28,6 +28,7 @@ cd sdcshield
 | `images/build-images.sh` | 烘焙构建依赖的容器镜像层(从 quay base + RPM 树强装)。幂等:输入哈希不变则 skip |
 | `container-build.sh` | 单 SP 源码构建(镜像已烘焙则跳过装包)。22.03/20.03 注入 polyfill + 版本宏 |
 | `build-all.sh` | 15 矩阵编排器(5 效率杠杆:deps 烘焙/哈希 skip/--since/-P 并行/smoke|full) |
+| `release-all.sh` | **一键式全流程**:base 镜像拉取(docker hub→podman 桥接)→ 烘焙 → 构建 → full 验证 → 提交推送(3 submodule + 主仓)。幂等,验证不过不推送 |
 | `package-built-artifacts.sh` | 产物进 RPM submodule 的 `built/`(二进制+libs+run+BUILD-HASH+MANIFEST+VERSION) |
 | `verify-built-pristine.sh` | 决定性闸门:纯净容器(只挂 built/)跑——"下载即跑" |
 | `package-release.sh` | 产出现场 tarball(~6MB,含 run.sh 自动检测 OS + 精确匹配) |
@@ -58,15 +59,43 @@ SP4   ...LTS_SP4                 ...LTS_SP4                 ...LTS_SP4
 
 构建全 15:`./scripts/offline-build/build-all.sh --all --full`(发布闸门)。
 
+### 一键式全流程(agent/CI 首选)
+
+```bash
+# 拉取 base → 烘焙 → 构建 → full 验证 → 提交推送,一条命令全做完:
+./scripts/offline-build/release-all.sh
+# base 镜像已齐时(推荐,跳过 docker 桥接):
+./scripts/offline-build/release-all.sh --skip-base
+```
+
+- 五阶段幂等(preflight → base → build → check → push),已就位自动 skip;任何阶段失败即停。
+- **硬闸**:check 阶段要求 15 × `RESULT: PASS` 且 0 FAIL,否则绝不推送;主仓在 `main`/detached 时拒绝运行。
+- 耗时约 2~3 小时;后台跑 + 轮询 `build-out/release-all-build.latest.log` 的 `RESULT:` 行。
+- 详细用法与 agent 调用要点见根 README「一键式全流程:release-all.sh」节。
+
+### RPM 目录结构
+
+每个 SP 子目录(`third-party/rpms/openEuler-XX.03/openEuler-XX.03LTS[_SPx]/`)只含两类内容:
+
+```
+openEuler-24.03LTS_SP3/
+├── rpms/        # 该 SP 全部依赖 *.rpm(324~437 个,从 repo.openeuler.org 下载)
+└── built/       # 构建产物: sdcshield + libs/ + run-sdcshield.sh + BUILD-HASH + MANIFEST.tsv + VERSION
+```
+
+所有脚本(下载/镜像烘焙/构建/打包/验证)统一从 `<SP 目录>/rpms/` 取 RPM;容器内挂载点仍为 `/rpms`。
+
 ### 15 SP 全 full 验证(已实测,100% 可重现)
 
 全 15 个 SP 各自 full 验证(eigen -n1 + 全量 -n8,纯净容器只挂 built/)全 PASS,0 fail 0 crash:
 
 | 系列 | LTS | SP1 | SP2 | SP3 | SP4 |
 |---|---|---|---|---|---|
-| 24.03 (gcc-12) | pass 1253 | 1286 | 1542 | 1758 | 2840 |
-| 22.03 (gcc-10) | pass 3812 | 2642 | 2429 | 3831 | 2326 |
-| 20.03 (gcc-10 toolset) | pass 2586 | 3610 | 2940 | 1145 | 1011 |
+| 24.03 (gcc-12) | pass 34881 | 35089 | 33557 | 33413 | 33760 |
+| 22.03 (gcc-10) | pass 31727 | 35748 | 31835 | 32606 | 31495 |
+| 20.03 (gcc-10 toolset) | pass 30191 | 30300 | 31669 | 31356 | 30382 |
+
+> 2026-09-02 全 15 full 验证(实测):全部 `RESULT: PASS`、fail=0、crashes=0、eigen_fails=[]。各 SP full-suite(-n8)pass 数如上(skip=8)。覆盖三系列 + 最老(gcc-7+toolset-10)/基准(gcc-12)toolchain。容器内对源码副本零修改(4 段 sed 全收敛到源码/meson option,只剩 CXXFLAGS/polyfill 注入 + -D)。
 
 > 全部 fail=0, 0 crash。覆盖三系列 + 最老(gcc-7+toolset-10)/基准(gcc-12)toolchain。容器内对源码副本零修改(4 段 sed 全收敛到源码/meson option,只剩 CXXFLAGS/polyfill 注入 + -D)。
 
