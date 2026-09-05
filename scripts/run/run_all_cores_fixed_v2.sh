@@ -1,0 +1,73 @@
+#!/bin/bash
+# ============================================================
+# 逐个核心运行 15 个测试用例，每个用例运行指定时间（默认 20 秒）
+# 用法： ./run_all_cores_fixed.sh [时间]  例如：./run_all_cores_fixed.sh 30s
+# ============================================================
+
+# 清理可能存在的默认日志文件（避免占用磁盘空间）
+echo "清理旧日志文件..."
+rm -f sdcshield-*.yaml
+
+TEST_TIME="${1:-10s}"
+NUM=$(echo "$TEST_TIME" | grep -o '^[0-9]*')
+UNIT=$(echo "$TEST_TIME" | grep -o '[a-zA-Z]*$')
+if [ -z "$NUM" ]; then NUM=1; UNIT="s"; fi
+case "$UNIT" in
+    s) TOTAL_SEC=$((NUM * 2)) ;;
+    m) TOTAL_SEC=$((NUM * 2 * 60)) ;;
+    h) TOTAL_SEC=$((NUM * 2 * 3600)) ;;
+    *) TOTAL_SEC=$((NUM * 2)) ;;
+esac
+TOTAL_TIME="${TOTAL_SEC}s"
+
+TOTAL_CORES=128
+LOG_DIR="fail_all_core"
+tests=(
+    memcpy_shuffle_v2
+    memcpy_shuffle
+    isal_crc_iscsi
+    isal_crc_ieee
+    isal_crc64_jones_norm
+    isal_crc64_iso_refl
+    isal_crc64_iso_norm
+    isal_crc64_ecma182_refl
+    isal_crc64_ecma182_norm
+    isal_crc32_gzip
+    isal_crc_t10dif
+    isal_crc64_jones_refl
+    crc32_fixed_shuffled
+    crc32_fixed
+    crc32
+)
+
+mkdir -p "$LOG_DIR"
+echo "开始时间: $(date)"
+
+for ((core=3; core<TOTAL_CORES; core++)); do
+    echo -n "核心 $core 测试中 ... "
+    LOG_FILE="$LOG_DIR/core_${core}.log"
+    > "$LOG_FILE"
+    for test in "${tests[@]}"; do
+        echo "  [$(date +%H:%M:%S)] 运行 $test" >> "$LOG_FILE"
+        # 使用 timeout，强制将输出重定向到日志文件，并丢弃任何可能生成默认文件的途径
+        timeout -k 5 "$TOTAL_SEC" ./builddir/sdcshield \
+            --enable="$test" \
+            -t "$TEST_TIME" \
+            -T "$TOTAL_TIME" \
+            --strict-runtime \
+            --cpuset="$core" \
+            -o "$LOG_FILE" >> "$LOG_FILE" 2>&1
+        # 注意：-o 已指定，再次重定向确保所有输出都进入日志
+    done
+    if grep -qi "result: fail" "$LOG_FILE"; then
+        echo -e "\033[31m❌ FAIL\033[0m"
+        # 保留失败日志，不删除
+    else
+        echo -e "\033[32m✅ PASS\033[0m"
+        rm -f "$LOG_FILE"
+    fi
+done
+
+echo "结束时间: $(date)"
+# 最后再次清理可能新生成的默认日志（如果有）
+rm -f sdcshield-*.yaml
